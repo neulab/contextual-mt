@@ -14,7 +14,7 @@ def main():
 
     for chat in chat_data.values():
         for turn in chat:
-            print(turn["source"])
+            print(f"{turn['speaker']} {turn['source']}")
             print(turn["target"])
 
 

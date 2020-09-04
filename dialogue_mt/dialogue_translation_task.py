@@ -2,6 +2,8 @@ import json
 import os
 import tempfile
 
+import torch
+
 from fairseq import options, utils
 from fairseq.tasks import register_task
 from fairseq.tasks.translation import TranslationTask
@@ -139,6 +141,7 @@ class DialogueTranslationTask(TranslationTask):
 
         # load dictionaries
         dictionary = cls.load_dictionary(os.path.join(paths[0], "dict.txt"))
+        dictionary.add_symbol("<brk>", overwrite=False)
         return cls(args, dictionary)
 
     def load_dataset(self, split, **kwargs):
@@ -147,13 +150,16 @@ class DialogueTranslationTask(TranslationTask):
             split (str): the split to load (train/valid/test)
         """
 
-        def binarize(s, vocab):
-            """ binarizes a sentence by applying bpe and tokenization """
+        def binarize(s, speaker=None):
+            """ binarizes a sentence by applying bpe and tokenization and adding a speaker tag """
             if self.bpe is not None:
                 s = self.bpe.encode(s)
-            tokens = vocab.encode_line(
+            tokens = self.src_dict.encode_line(
                 s, append_eos=False, add_if_not_exist=False
             ).long()
+            if speaker is not None:
+                spk_tensor = torch.Tensor([self.src_dict.index(speaker)])
+                tokens = torch.cat([spk_tensor, tokens])
             return tokens
 
         data_path = os.path.join(self.args.data, f"{split}.json")
@@ -172,8 +178,8 @@ class DialogueTranslationTask(TranslationTask):
                 src = turn["source"]
                 tgt = turn["target"]
                 idx = turn["utteranceID"]
-                src_ds.add_item(binarize(src, self.src_dict))
-                tgt_ds.add_item(binarize(tgt, self.tgt_dict))
+                src_ds.add_item(binarize(src, turn["speaker"]))
+                tgt_ds.add_item(binarize(tgt))
                 ids.append(idx)
 
         src_idx_file = os.path.join(self.args.data, f"{split}.src.idx")
