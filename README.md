@@ -10,8 +10,8 @@ Currently supports:
 
 ## Requirements 
 
-* [FairSeq](https://github.com/pytorch/fairseq) version >= 0.9.0
-* Python version >= 3.6
+* [Fairseq](https://github.com/pytorch/fairseq) >= 0.9.0
+* Python >= 3.6
 
 ## Pre-processing
 
@@ -47,7 +47,7 @@ rm /tmp/train.flat
 You can train using fairseq's training tool. Just select the `dialogue_translation` task with the approriate context sizes
 
 ```bash
-fairseq-train $DATA_DIR --user-dir dialogue_mt/tasks \
+fairseq-train $DATA_DIR --user-dir dialogue_mt \
     --task dialogue_translation --source-context-size $N --target-context-size $M \
     --arch transformer --share-all-embeddings \
     --optimizer adam --adam-betas '(0.9, 0.98)' --clip-norm 0.0 \
