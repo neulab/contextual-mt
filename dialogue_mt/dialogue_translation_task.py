@@ -200,7 +200,9 @@ class DialogueTranslationTask(TranslationTask):
 
     def build_model(self, args):
         model = FairseqTask.build_model(self, args)
-        if getattr(args, 'eval_bleu', False):
-            gen_args = json.loads(getattr(args, 'eval_bleu_args', '{}') or '{}')
-            self.sequence_generator = self.build_generator([model], Namespace(**gen_args))
+        if getattr(args, "eval_bleu", False):
+            gen_args = json.loads(getattr(args, "eval_bleu_args", "{}") or "{}")
+            self.sequence_generator = self.build_generator(
+                [model], Namespace(**gen_args)
+            )
         return model
