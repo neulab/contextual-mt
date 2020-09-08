@@ -25,11 +25,11 @@ class DialogueLangPairDataset(LanguagePairDataset):
         for i, size in enumerate(src_sizes):
             for j in range(1, min(self.src_ctx_size, self.ids[i]) + 1):
                 size += src_sizes[i - j] + 1
-            full_src_sizes.append(size + 1)
+            full_src_sizes.append(size + 2)
         for i, size in enumerate(tgt_sizes):
             for j in range(1, min(self.tgt_ctx_size, self.ids[i]) + 1):
                 size += tgt_sizes[i - j] + 1
-            full_tgt_sizes.append(size + 1)
+            full_tgt_sizes.append(size + 2)
 
         super().__init__(
             srcs,
@@ -54,6 +54,7 @@ class DialogueLangPairDataset(LanguagePairDataset):
                 tgt_item = torch.cat([self.tgt[index - i], brk_id, tgt_item])
 
         eos_id = torch.Tensor([self.src_dict.eos()]).long()
-        src_item = torch.cat([src_item, eos_id])
-        tgt_item = torch.cat([tgt_item, eos_id])
+        bos_id = torch.Tensor([self.src_dict.bos()]).long()
+        src_item = torch.cat([bos_id, src_item, eos_id])
+        tgt_item = torch.cat([bos_id, tgt_item, eos_id])
         return {"id": index, "source": src_item, "target": tgt_item}

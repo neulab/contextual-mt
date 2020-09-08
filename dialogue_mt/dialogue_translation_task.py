@@ -1,10 +1,11 @@
+from argparse import Namespace
 import json
 import os
 
 import torch
 
 from fairseq import options, utils
-from fairseq.tasks import register_task
+from fairseq.tasks import register_task, FairseqTask
 from fairseq.tasks.translation import TranslationTask
 from fairseq.data import encoders, indexed_dataset, data_utils
 
@@ -68,21 +69,6 @@ class DialogueTranslationTask(TranslationTask):
             "--eval-bleu", action="store_true", help="evaluation with BLEU scores"
         )
         parser.add_argument(
-            "--eval-bleu-detok",
-            type=str,
-            default="space",
-            help='detokenize before computing BLEU (e.g., "moses"); '
-            'required if using --eval-bleu; use "space" to '
-            "disable detokenization; see fairseq.data.encoders "
-            "for other options",
-        )
-        parser.add_argument(
-            "--eval-bleu-detok-args",
-            type=str,
-            metavar="JSON",
-            help="args for building the tokenizer, if needed",
-        )
-        parser.add_argument(
             "--eval-tokenized-bleu",
             action="store_true",
             default=False,
@@ -125,6 +111,7 @@ class DialogueTranslationTask(TranslationTask):
     def __init__(self, args, dictionary):
         super().__init__(args, dictionary, dictionary)
         self.bpe = encoders.build_bpe(args)
+        self.tokenizer = encoders.build_tokenizer(args)
 
     @classmethod
     def setup_task(cls, args, **kwargs):
@@ -210,3 +197,12 @@ class DialogueTranslationTask(TranslationTask):
             tgt_ctx_size=self.args.target_context_size,
             shuffle=True,
         )
+
+    def build_model(self, args):
+        model = FairseqTask.build_model(self, args)
+        if getattr(args, "eval_bleu", False):
+            gen_args = json.loads(getattr(args, "eval_bleu_args", "{}") or "{}")
+            self.sequence_generator = self.build_generator(
+                [model], Namespace(**gen_args)
+            )
+        return model
