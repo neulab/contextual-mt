@@ -129,3 +129,8 @@ dmypy.json
 .pyre/
 
 .vscode/
+mosesdecoder/
+subword-nmt/
+*.sh
+*.out
+checkpoints/

@@ -122,6 +122,13 @@ class DialogueTranslationTask(TranslationTask):
             help="number of previous target sentences/messages to include in the context",
         )
 
+        parser.add_argument(
+            "--context-method",
+            default="tag",
+            type=str,
+            help="how context is integrated, choose from 'tag', 'flag', 'encode'",
+        )
+
     def __init__(self, args, dictionary):
         super().__init__(args, dictionary, dictionary)
         self.bpe = encoders.build_bpe(args)
@@ -157,7 +164,7 @@ class DialogueTranslationTask(TranslationTask):
                 s, append_eos=False, add_if_not_exist=False
             ).long()
             if speaker is not None:
-                spk_tensor = torch.Tensor([self.src_dict.index(speaker)])
+                spk_tensor = torch.Tensor([self.src_dict.index(speaker)]).long()
                 tokens = torch.cat([spk_tensor, tokens])
             return tokens
 
@@ -206,6 +213,7 @@ class DialogueTranslationTask(TranslationTask):
             tgt_ds.sizes,
             self.tgt_dict,
             ids,
+            ctx_method=self.args.context_method,
             src_ctx_size=self.args.source_context_size,
             tgt_ctx_size=self.args.target_context_size,
             shuffle=True,
