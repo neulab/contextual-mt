@@ -131,6 +131,10 @@ dmypy.json
 .vscode/
 mosesdecoder/
 subword-nmt/
+fastBPE/
 *.sh
 *.out
 checkpoints/
+logs/
+outputs/
+scripts/
