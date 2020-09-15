@@ -1,14 +1,18 @@
+from argparse import Namespace
 import json
 import os
+import logging
 
 import torch
 
 from fairseq import options, utils
-from fairseq.tasks import register_task
+from fairseq.tasks import register_task, FairseqTask
 from fairseq.tasks.translation import TranslationTask
 from fairseq.data import encoders, indexed_dataset, data_utils
 
 from dialogue_mt import DialogueLangPairDataset
+
+logger = logging.getLogger(__name__)
 
 
 @register_task("dialogue_translation")
@@ -68,21 +72,6 @@ class DialogueTranslationTask(TranslationTask):
             "--eval-bleu", action="store_true", help="evaluation with BLEU scores"
         )
         parser.add_argument(
-            "--eval-bleu-detok",
-            type=str,
-            default="space",
-            help='detokenize before computing BLEU (e.g., "moses"); '
-            'required if using --eval-bleu; use "space" to '
-            "disable detokenization; see fairseq.data.encoders "
-            "for other options",
-        )
-        parser.add_argument(
-            "--eval-bleu-detok-args",
-            type=str,
-            metavar="JSON",
-            help="args for building the tokenizer, if needed",
-        )
-        parser.add_argument(
             "--eval-tokenized-bleu",
             action="store_true",
             default=False,
@@ -132,6 +121,7 @@ class DialogueTranslationTask(TranslationTask):
     def __init__(self, args, dictionary):
         super().__init__(args, dictionary, dictionary)
         self.bpe = encoders.build_bpe(args)
+        self.tokenizer = encoders.build_tokenizer(args)
 
     @classmethod
     def setup_task(cls, args, **kwargs):
@@ -158,13 +148,21 @@ class DialogueTranslationTask(TranslationTask):
 
         def binarize(s, speaker=None):
             """ binarizes a sentence by applying bpe and tokenization and adding a speaker tag """
+            if self.tokenizer is not None:
+                s = self.tokenizer.encode(s)
             if self.bpe is not None:
                 s = self.bpe.encode(s)
             tokens = self.src_dict.encode_line(
                 s, append_eos=False, add_if_not_exist=False
             ).long()
             if speaker is not None:
+<<<<<<< HEAD
                 spk_tensor = torch.Tensor([self.src_dict.index(speaker)]).long()
+=======
+                if speaker not in self.src_dict:
+                    self.src_dict.add_symbol(speaker)
+                spk_tensor = torch.Tensor([self.src_dict.index(speaker)])
+>>>>>>> 11d1f940476201bf0b6364c48d3e9556f6d6cde7
                 tokens = torch.cat([spk_tensor, tokens])
             return tokens
 
@@ -172,8 +170,8 @@ class DialogueTranslationTask(TranslationTask):
         with open(data_path, "r") as f:
             chat_dict = json.load(f)
 
-        src_bin_file = os.path.join(self.args.data, f"{split}.src.bin")
-        tgt_bin_file = os.path.join(self.args.data, f"{split}.tgt.bin")
+        src_bin_file = os.path.join(self.args.data, f"{split}.src-tgt.src.bin")
+        tgt_bin_file = os.path.join(self.args.data, f"{split}.src-tgt.tgt.bin")
         src_ds = indexed_dataset.make_builder(src_bin_file, self.args.dataset_impl)
         tgt_ds = indexed_dataset.make_builder(tgt_bin_file, self.args.dataset_impl)
 
@@ -184,22 +182,22 @@ class DialogueTranslationTask(TranslationTask):
                 src = turn["source"]
                 tgt = turn["target"]
                 idx = turn["utteranceID"]
-                src_ds.add_item(binarize(src, turn["speaker"]))
+                src_ds.add_item(binarize(src, speaker=turn["speaker"]))
                 tgt_ds.add_item(binarize(tgt))
                 ids.append(idx)
 
-        src_idx_file = os.path.join(self.args.data, f"{split}.src.idx")
-        tgt_idx_file = os.path.join(self.args.data, f"{split}.tgt.idx")
+        src_idx_file = os.path.join(self.args.data, f"{split}.src-tgt.src.idx")
+        tgt_idx_file = os.path.join(self.args.data, f"{split}.src-tgt.tgt.idx")
         src_ds.finalize(src_idx_file)
         tgt_ds.finalize(tgt_idx_file)
 
         src_ds = data_utils.load_indexed_dataset(
-            os.path.join(self.args.data, f"{split}.src"),
+            os.path.join(self.args.data, f"{split}.src-tgt.src"),
             self.src_dict,
             self.args.dataset_impl,
         )
         tgt_ds = data_utils.load_indexed_dataset(
-            os.path.join(self.args.data, f"{split}.tgt"),
+            os.path.join(self.args.data, f"{split}.src-tgt.tgt"),
             self.tgt_dict,
             self.args.dataset_impl,
         )
@@ -217,4 +215,61 @@ class DialogueTranslationTask(TranslationTask):
             src_ctx_size=self.args.source_context_size,
             tgt_ctx_size=self.args.target_context_size,
             shuffle=True,
+            left_pad_source=self.args.left_pad_source,
+            left_pad_target=self.args.left_pad_target,
         )
+
+    def build_model(self, args):
+        model = FairseqTask.build_model(self, args)
+        if getattr(args, "eval_bleu", False):
+            gen_args = json.loads(getattr(args, "eval_bleu_args", "{}") or "{}")
+            self.sequence_generator = self.build_generator(
+                [model], Namespace(**gen_args)
+            )
+        return model
+
+    def inference_step(
+        self, generator, models, sample, prefix_tokens=None, constraints=None
+    ):
+        if self.args.target_context_size > 0:
+            context, target, idxs = [], [], []
+            for full_tgt in sample["target"]:
+                # for each sample in the batch, strip the padding
+                stripped_tgt = utils.strip_pad(full_tgt, pad=self.tgt_dict.pad())
+                # find the latest <brk> token and split the target on it
+                brk_indices = torch.nonzero(
+                    stripped_tgt == self.tgt_dict.index("<brk>")
+                )
+                brk_index = brk_indices[-1][0] if len(brk_indices) > 0 else -1
+                ctx, tgt = stripped_tgt[: brk_index + 1], stripped_tgt[brk_index + 1 :]
+                # and redo the batch, saving the indexes used for splitting for later
+                target.append(tgt)
+                context.append(ctx)
+                idxs.append(brk_index)
+
+            # tensorize splitted target/context again and set new target
+            context = data_utils.collate_tokens(
+                context, self.tgt_dict.pad(), self.tgt_dict.eos()
+            )
+            target = data_utils.collate_tokens(
+                target, self.tgt_dict.pad(), self.tgt_dict.eos()
+            )
+            sample["target"] = target
+
+        with torch.no_grad():
+            batched_output = generator.generate(
+                models,
+                sample,
+                prefix_tokens=context,
+                constraints=constraints,
+            )
+
+        if self.args.target_context_size > 0:
+            for brk_id, output in zip(idxs, batched_output):
+                for beam in output:
+                    # for each beam in each sample, remove the context and associated atributes
+                    beam["tokens"] = beam["tokens"][brk_id + 1 :]
+                    beam["attention"] = beam["attention"][brk_id + 1 :]
+                    beam["positional_scores"] = beam["positional_scores"][brk_id + 1 :]
+
+        return batched_output

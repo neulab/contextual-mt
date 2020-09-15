@@ -1,0 +1,45 @@
+total : 7025 14000 0.5017857142857143
+
+statistics by error category
+it:elle : 1815 3500 0.5185714285714286
+it:il : 1734 3500 0.49542857142857144
+they:elles : 1747 3500 0.49914285714285717
+they:ils : 1729 3500 0.494
+
+statistics by intrasegmental
+False : 4020 8014 0.5016221612178687 
+True : 3005 5986 0.5020046775810224 
+
+statistics by ante distance
+0 : 3005 5986 0.5020046775810224 
+1 : 2317 4566 0.5074463425317565 
+2 : 813 1629 0.4990791896869245 
+3 : 424 880 0.4818181818181818 
+>3 : 466 939 0.49627263045793396 
+
+ante distance per pronoun pairs
+ante distance 0 :
+it:elle 1658 
+it:il 1628 
+they:elles 1535 
+they:ils 1165 
+ante distance 1 :
+it:elle 1144 
+it:il 1094 
+they:elles 1148 
+they:ils 1180 
+ante distance 2 :
+it:elle 356 
+it:il 363 
+they:elles 409 
+they:ils 501 
+ante distance 3 :
+it:elle 166 
+it:il 213 
+they:elles 199 
+they:ils 302 
+ante distance >3 :
+it:elle 176 
+it:il 202 
+they:elles 209 
+they:ils 352 
