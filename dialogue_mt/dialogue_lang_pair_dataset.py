@@ -55,7 +55,7 @@ class DialogueLangPairDataset(LanguagePairDataset):
     def __getitem__(self, index):
         # self.ctx_method = "encode"
         # self.src_ctx_size = 1
-        # self.tgt_ctx_size = 0
+        # self.tgt_ctx_size = 1
         bos_id = torch.Tensor([self.src_dict.bos()]).long()
         eos_id = torch.Tensor([self.src_dict.eos()]).long()
         src_item = torch.cat([self.src[index], eos_id])

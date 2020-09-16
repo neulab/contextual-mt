@@ -148,21 +148,13 @@ class DialogueTranslationTask(TranslationTask):
 
         def binarize(s, speaker=None):
             """ binarizes a sentence by applying bpe and tokenization and adding a speaker tag """
-            if self.tokenizer is not None:
-                s = self.tokenizer.encode(s)
             if self.bpe is not None:
                 s = self.bpe.encode(s)
             tokens = self.src_dict.encode_line(
                 s, append_eos=False, add_if_not_exist=False
             ).long()
             if speaker is not None:
-<<<<<<< HEAD
                 spk_tensor = torch.Tensor([self.src_dict.index(speaker)]).long()
-=======
-                if speaker not in self.src_dict:
-                    self.src_dict.add_symbol(speaker)
-                spk_tensor = torch.Tensor([self.src_dict.index(speaker)])
->>>>>>> 11d1f940476201bf0b6364c48d3e9556f6d6cde7
                 tokens = torch.cat([spk_tensor, tokens])
             return tokens
 
@@ -255,6 +247,8 @@ class DialogueTranslationTask(TranslationTask):
                 target, self.tgt_dict.pad(), self.tgt_dict.eos()
             )
             sample["target"] = target
+        else:
+            context = prefix_tokens
 
         with torch.no_grad():
             batched_output = generator.generate(
