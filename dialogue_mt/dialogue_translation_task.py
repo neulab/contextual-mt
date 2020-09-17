@@ -22,9 +22,9 @@ class DialogueTranslationTask(TranslationTask):
         parser.add_argument(
             "data",
             help="colon separated path to data directories list, \
-                            will be iterated upon during epochs in round-robin manner; \
-                            however, valid and test data are always in the first directory to \
-                            avoid the need for repeating them in all directories",
+                        will be iterated upon during epochs in round-robin manner; \
+                        however, valid and test data are always in the first directory to \
+                        avoid the need for repeating them in all directories",
         )
         parser.add_argument(
             "--left-pad-source",
@@ -149,18 +149,17 @@ class DialogueTranslationTask(TranslationTask):
                 s, append_eos=False, add_if_not_exist=False
             ).long()
             if speaker is not None:
-                if speaker not in self.src_dict:
-                    self.src_dict.add_symbol(speaker)
                 spk_tensor = torch.Tensor([self.src_dict.index(speaker)])
                 tokens = torch.cat([spk_tensor, tokens])
             return tokens
+
+        src_bin_file = os.path.join(self.args.data, f"{split}.src-tgt.src.bin")
+        tgt_bin_file = os.path.join(self.args.data, f"{split}.src-tgt.tgt.bin")
 
         data_path = os.path.join(self.args.data, f"{split}.json")
         with open(data_path, "r") as f:
             chat_dict = json.load(f)
 
-        src_bin_file = os.path.join(self.args.data, f"{split}.src-tgt.src.bin")
-        tgt_bin_file = os.path.join(self.args.data, f"{split}.src-tgt.tgt.bin")
         src_ds = indexed_dataset.make_builder(src_bin_file, self.args.dataset_impl)
         tgt_ds = indexed_dataset.make_builder(tgt_bin_file, self.args.dataset_impl)
 
@@ -171,7 +170,8 @@ class DialogueTranslationTask(TranslationTask):
                 src = turn["source"]
                 tgt = turn["target"]
                 idx = turn["utteranceID"]
-                src_ds.add_item(binarize(src, speaker=turn["speaker"]))
+                speaker = turn["speaker"]
+                src_ds.add_item(binarize(src, speaker=speaker))
                 tgt_ds.add_item(binarize(tgt))
                 ids.append(idx)
 
@@ -219,7 +219,9 @@ class DialogueTranslationTask(TranslationTask):
     def inference_step(
         self, generator, models, sample, prefix_tokens=None, constraints=None
     ):
-        if self.args.target_context_size > 0:
+        assert prefix_tokens is None, "currently doesn't support prefix tokens"
+        context = None
+        if self.args.target_context_size > 0 and sample["target"] is not None:
             context, target, idxs = [], [], []
             for full_tgt in sample["target"]:
                 # for each sample in the batch, strip the padding
