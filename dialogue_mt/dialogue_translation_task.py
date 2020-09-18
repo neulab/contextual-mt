@@ -219,7 +219,10 @@ class DialogueTranslationTask(TranslationTask):
     def inference_step(
         self, generator, models, sample, prefix_tokens=None, constraints=None
     ):
-        assert prefix_tokens is None, "currently doesn't support prefix tokens"
+        assert (
+            prefix_tokens is None
+        ), "dialogue translation task currently doesn't support prefix tokens"
+
         context = None
         if self.args.target_context_size > 0 and sample["target"] is not None:
             context, target, idxs = [], [], []
