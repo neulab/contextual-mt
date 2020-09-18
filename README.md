@@ -15,6 +15,14 @@ Currently supports:
 * [FastBPE](https://github.com/glample/fastBPE) >= 0.1.0
 * Python >= 3.6
 
+Also run 
+
+```bash
+pip install -e .
+```
+
+To have access to the entrypoints (such as the evaluation script) in your path
+
 ## Pre-processing
 
 Most of the preprocessing is done as part of the trainining.
@@ -57,5 +65,5 @@ You can then run evaluation by running
 cp $DATA_DIR/dict.txt $CHECKPOINTS_DIR
 dialogue-evaluate $DATA_DIR \
     --path $CHECKPOINTS_DIR --split test \
-    --batch-size 64 --beam-size 5
+    --batch-size 64 --beam 5
 ```
