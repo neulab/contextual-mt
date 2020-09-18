@@ -163,7 +163,6 @@ def main():
             targets.append(
                 torch.stack(tgt_ctx_ids) if tgt_ctx_ids else torch.tensor([])
             )
-            breakpoint()
             src_context[idx].append(src_ids)
 
         # while exit condition
