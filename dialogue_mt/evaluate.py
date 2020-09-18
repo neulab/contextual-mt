@@ -23,6 +23,7 @@ def main():
         "--split", type=str, default="test", help="split do inference on"
     )
     parser.add_argument("--path", metavar="FILE", help="path to model file")
+    parser.add_argument("--beam", default=5, type=int, metavar="N", help="beam size")
     parser.add_argument(
         "--max-len-a",
         default=0,
@@ -197,8 +198,8 @@ def main():
 
     if args.print_output is not None:
         with open(args.print_output, "w") as f:
-            for ref in refs:
-                print(ref, file=f)
+            for hyp in preds:
+                print(hyp, file=f)
 
 
 if __name__ == "__main__":
