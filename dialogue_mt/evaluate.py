@@ -4,8 +4,6 @@ import json
 import sacrebleu
 import tqdm
 
-import dialogue_mt
-
 import torch
 
 from fairseq import utils, hub_utils
@@ -21,7 +19,9 @@ def main():
                     however, valid and test data are always in the first directory to \
                     avoid the need for repeating them in all directories",
     )
-    parser.add_argument("--split", type=str, default="test")
+    parser.add_argument(
+        "--split", type=str, default="test", help="split do inference on"
+    )
     parser.add_argument("--path", metavar="FILE", help="path to model file")
     parser.add_argument(
         "--max-len-a",
@@ -56,17 +56,22 @@ def main():
         type=float,
         help="length penalty: <1.0 favors shorter, >1.0 favors longer sentences",
     )
-
     parser.add_argument(
         "--batch-size",
         type=int,
         default=8,
         help=("number of chats to inference in parallel"),
     )
-    parser.add_argument("--print-output", type=str, default=None)
+    parser.add_argument(
+        "--print-output",
+        type=str,
+        default=None,
+        help="if set, saves the outpus to a file",
+    )
 
     args = parser.parse_args()
 
+    # load pretrained model, set eval and send to cuda
     pretrained = hub_utils.from_pretrained(
         args.path, checkpoint_file="checkpoint_best.pt"
     )
@@ -74,6 +79,7 @@ def main():
     for model in models:
         model.cuda()
         model.eval()
+
     bpe = pretrained["task"].bpe
     vocab = pretrained["task"].src_dict
     tokenizer = pretrained["task"].tokenizer
@@ -94,7 +100,7 @@ def main():
         x = bpe.decode(x)
         x = tokenizer.decode(x)
         return x
-    
+
     def binarize(s, speaker):
         """ binarizes a sentence by applying bpe and tokenization and adding a speaker tag """
         s = encode(s)
@@ -157,12 +163,12 @@ def main():
             targets.append(
                 torch.stack(tgt_ctx_ids) if tgt_ctx_ids else torch.tensor([])
             )
+            breakpoint()
             src_context[idx].append(src_ids)
 
         # while exit condition
         if all(chat is None for chat in current_chats):
             break
-
         # create batch
         src_tokens = data_utils.collate_tokens(src_tokens, vocab.pad(), vocab.eos())
         src_lengths = torch.tensor(src_lengths)
@@ -182,12 +188,14 @@ def main():
             preds.append(decode(hyp_str))
 
             # collect output to be prefix for next utterance
-            tgt_context[idx].append(hyp_ids[:-1])
+            tgt_context[idx].append(
+                hyp_ids[:-1] if hyp_ids[-1] == vocab.eos() else hyp_ids
+            )
 
-        p = bar.update(len(src_lengths))
+        bar.update(len(src_lengths))
 
     print(sacrebleu.corpus_bleu(preds, [refs]).format())
-    
+
     if args.print_output is not None:
         with open(args.print_output, "w") as f:
             for ref in refs:
