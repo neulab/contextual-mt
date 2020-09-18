@@ -2,7 +2,7 @@ import os
 import json
 from pathlib import Path
 
-DATASETS = ['wmtchat2020', 'openSub_ende', 'openSub_enes', 'openSub_enfr', 'openSub_enru']
+DATASETS = ['wmtchat2020', 'openSub_ende', 'openSub_enet', 'openSub_enfr', 'openSub_enru']
 PARTITIONS = ['train', 'dev', 'test']
 
 def create_data(base_path='data', type_c='agnostic'):
@@ -46,11 +46,11 @@ def create_data(base_path='data', type_c='agnostic'):
                             raise NotImplementedError
                     elif type_c == 'multilingual':
                         if block['speaker'] == spk_a:
-                            data_src.append(block['source'])
-                            data_tgt.append(block['target'])
-                        elif block['speaker'] == spk_b:
                             data_src.append(block['target'])
                             data_tgt.append(block['source'])
+                        elif block['speaker'] == spk_b:
+                            data_src.append(block['source'])
+                            data_tgt.append(block['target'])
                         else:
                             raise NotImplementedError
                     else:
@@ -69,7 +69,7 @@ def create_data(base_path='data', type_c='agnostic'):
                         if len(line):
                             print(line, file=f)
             elif type_c == 'multilingual':
-                list_langs = [[lang_src, lang_tgt, data_src, data_tgt], [lang_tgt, lang_src, data_tgt, data_src]]
+                list_langs = [[lang_src, lang_tgt, data_src, data_tgt]]
                     
                 for lang_1, lang_2, temp_1, temp_2 in list_langs:
                     with open(inter_path / type_c / dataset / f'{partition}.{lang_1}-{lang_2}.{lang_1}', 'w') as f:
