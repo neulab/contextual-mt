@@ -1,7 +1,7 @@
 import setuptools
 
 setuptools.setup(
-    name="dialogue-mt", 
+    name="dialogue-mt",
     version="0.0.1",
     author="Patrick Fernandes, Kayo Yin, Kervy Dante",
     author_email="pfernand@cs.cmu.edu",
