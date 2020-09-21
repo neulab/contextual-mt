@@ -129,6 +129,7 @@ dmypy.json
 .pyre/
 
 .vscode/
+<<<<<<< HEAD
 mosesdecoder/
 subword-nmt/
 fastBPE/
@@ -138,3 +139,6 @@ checkpoints/
 logs/
 outputs/
 scripts/
+=======
+outputs/
+>>>>>>> 318651caeb1f1a1dd1455424cbb9a706c2205ad6

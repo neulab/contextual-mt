@@ -15,6 +15,14 @@ Currently supports:
 * [FastBPE](https://github.com/glample/fastBPE) >= 0.1.0
 * Python >= 3.6
 
+Also run 
+
+```bash
+pip install -e .
+```
+
+To have access to the entrypoints (such as the evaluation script) in your path
+
 ## Pre-processing
 
 Most of the preprocessing is done as part of the trainining.
@@ -22,12 +30,13 @@ Most of the preprocessing is done as part of the trainining.
 The only thing needed is to train a bpe on the tokenized corpus. 
 
 ```bash
-BPE_TOKENS=10000
+BPE_TOKENS=20000
 
-python flatten_chat.py $DATA_DIR/train.json | sacremoses tokenize > /tmp/train.flat
+python flatten_chat.py $DATA_DIR/train.json | sacremoses normalize | sacremoses tokenize > /tmp/train.flat
 fast learnbpe $BPE_TOKENS /tmp/train.flat > $DATA_DIR/bpecodes
 fast applybpe /tmp/train.flat.$BPE_TOKENS /tmp/train.flat $DATA_DIR/bpecodes
 fast getvocab /tmp/train.flat.$BPE_TOKENS > $DATA_DIR/dict.txt
+python flatten_chat.py $DATA_DIR/train.json --print-speakers >> $DATA_DIR/dict.txt
 rm /tmp/train.flat /tmp/train.flat.$BPE_TOKENS 
 ```
 
@@ -36,17 +45,25 @@ rm /tmp/train.flat /tmp/train.flat.$BPE_TOKENS
 You can train using fairseq's training tool. Just select the `dialogue_translation` task with the approriate context sizes
 
 ```bash
-fairseq-train $DATA_DIR --user-dir dialogue_mt \
+fairseq-train $DATA_DIR \
+    --user-dir dialogue_mt \
     --task dialogue_translation --source-context-size $N --target-context-size $M \
     --tokenizer moses --bpe fastbpe --bpe-codes $DATA_DIR/bpecodes
     --arch transformer --share-all-embeddings \
-    --optimizer adam --adam-betas '(0.9, 0.98)' --clip-norm 0.0 \
-    --lr-scheduler inverse_sqrt --warmup-init-lr 1e-07 --warmup-updates 4000 --lr 0.0005 --min-lr 1e-09 \
-    --criterion label_smoothed_cross_entropy --label-smoothing 0.1 --dropout 0.2 --weight-decay 0.0 \
-    --max-tokens  4096  --patience 5 --seed 42 \
-    --save-dir checkpoints --no-epoch-checkpoints
+    --optimizer adam --adam-betas '(0.9, 0.98)' --clip-norm 0.1 \
+    --lr 7e-4 --lr-scheduler inverse_sqrt  --warmup-updates 4000 \
+    --criterion label_smoothed_cross_entropy --label-smoothing 0.1 --dropout 0.3 --weight-decay 0.0001 \
+    --max-tokens  4096 --update-freq 8 --patience 10 --seed 42 \
+    --save-dir $CHECKPOINTS_DIR --no-epoch-checkpoints
 ```
 
 ## Inference and Evaluation
 
+You can then run evaluation by running
 
+```bash
+cp $DATA_DIR/dict.txt $CHECKPOINTS_DIR
+dialogue-evaluate $DATA_DIR \
+    --path $CHECKPOINTS_DIR --split test \
+    --batch-size 64 --beam 5
+```
