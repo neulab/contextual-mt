@@ -93,6 +93,8 @@ if __name__ == "__main__":
             ids.append(sample_id)
             hypo = hypos[i][0]
             scores.append(hypo['score'] / math.log(2))
+            #print(sample_id)
+            #print(tgt_dict.string(hypo['tokens']))
     # print(ids[:5])
     # print(tgts[:5])
     scores = [x for _,x in sorted(zip(ids,scores))]

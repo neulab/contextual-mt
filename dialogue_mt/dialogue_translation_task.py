@@ -13,7 +13,6 @@ from fairseq.data import encoders, indexed_dataset, data_utils
 from dialogue_mt import DialogueLangPairDataset
 from .contrastive_lang_pair_dataset import ContrastiveDataset
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -28,7 +27,6 @@ class DialogueTranslationTask(TranslationTask):
                         however, valid and test data are always in the first directory to \
                         avoid the need for repeating them in all directories",
         )
-#        parser.add_argument("--contra", default=None, type=str)
         parser.add_argument(
             "--left-pad-source",
             default="True",
@@ -146,7 +144,7 @@ class DialogueTranslationTask(TranslationTask):
     def load_dataset(self, split, **kwargs):
         """Loads a dataset
         Args:
-            split (str): the split to load (train/valid/test/contra)
+            split (str): the split to load (train/valid/test)
         """
 
         def binarize(s, speaker=None):
@@ -157,11 +155,7 @@ class DialogueTranslationTask(TranslationTask):
                 s, append_eos=False, add_if_not_exist=False
             ).long()
             if speaker is not None:
-<<<<<<< HEAD
                 spk_tensor = torch.Tensor([self.src_dict.index(speaker)]).long()
-=======
-                spk_tensor = torch.Tensor([self.src_dict.index(speaker)])
->>>>>>> 318651caeb1f1a1dd1455424cbb9a706c2205ad6
                 tokens = torch.cat([spk_tensor, tokens])
             return tokens
 
@@ -219,6 +213,7 @@ class DialogueTranslationTask(TranslationTask):
             left_pad_source=self.args.left_pad_source,
             left_pad_target=self.args.left_pad_target,
         )
+
     def build_model(self, args):
         model = FairseqTask.build_model(self, args)
         if getattr(args, "eval_bleu", False):
