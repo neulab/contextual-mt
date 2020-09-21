@@ -13,12 +13,6 @@ import sacrebleu
 
 logger = logging.getLogger()
 
-def get_symbols_to_strip_from_output(generator):
-    if hasattr(generator, 'symbols_to_strip_from_output'):
-        return generator.symbols_to_strip_from_output
-    else:
-        return {generator.eos}
-
 if __name__ == "__main__":
 
     # Parse command-line arguments for generation
@@ -32,7 +26,6 @@ if __name__ == "__main__":
     # Setup task
     task = tasks.setup_task(args)
     task.load_contra()
-    dataset = task.dataset("contra")
 
     # Set dictionaries
     try:
@@ -83,45 +76,32 @@ if __name__ == "__main__":
         default_log_format=('tqdm' if not args.no_progress_bar else 'none'),
     )
 
-    # Initialize generator
-    generator = task.build_generator([model], args)
-
-    # Handle tokenization and BPE
-    tokenizer = encoders.build_tokenizer(args)
-    bpe = encoders.build_bpe(args)
-
-    def decode_fn(x):
-        if bpe is not None:
-            x = bpe.decode(x)
-        if tokenizer is not None:
-            x = tokenizer.decode(x)
-        return x
-    num_sentences = 0
-    has_target = True
     scorer = SequenceScorer(task.target_dictionary)
 
     scores = []
+    ids = []
+    tgts = []
     for sample in progress:
         sample = utils.move_to_cuda(sample) if use_cuda else sample
+        tgts.append(tgt_dict.string(sample["target"]))
         if 'net_input' not in sample:
             continue
 
-        prefix_tokens = None
-        if args.prefix_size > 0:
-            prefix_tokens = sample['target'][:, :args.prefix_size]
-
-        constraints = None
-        if "constraints" in sample:
-            constraints = sample["constraints"]
         hypos = scorer.generate([model], sample)
         #hypos = task.contra_step(generator, model, sample, prefix_tokens=prefix_tokens, constraints=constraints)
-        
-        for i, hypos_i in enumerate(hypos):
-            hypo = hypos_i[0]
+        for i, sample_id in enumerate(sample['id'].tolist()):
+            ids.append(sample_id)
+            hypo = hypos[i][0]
             scores.append(hypo['score'] / math.log(2))
-
+    # print(ids[:5])
+    # print(tgts[:5])
+    scores = [x for _,x in sorted(zip(ids,scores))]
+    # tgts = [x for _,x in sorted(zip(ids,tgts))]
+    # print("sorted")
+    # for t in tgts[:5]:
+    #     print(t)
     with open(args.output, "w") as file:
-        for s in scores:
+        for i,s in zip(ids, scores):
             file.write(f"{s}\n")
         
     print("done!")

@@ -61,20 +61,20 @@ class ContrastiveDataset(LanguagePairDataset):
             embed = torch.zeros(src_item.size()[0])
         src_ctx_item = torch.Tensor().long()
         brk_id = torch.Tensor([self.src_dict.index("<brk>")]).long()
-        for i in range(min(self.src_ctx_size, index) + 1):
+        for i in range(min(self.src_ctx_size, index + 1)):
             src_ctx_item = torch.cat([self.c_srcs[index - i], src_ctx_item])
         if self.ctx_method == "flag":
             embed = torch.cat((torch.ones(src_ctx_item.size()[0] + 1), embed)).long()
             src_item = torch.cat([src_ctx_item, brk_id, src_item])
         elif self.ctx_method == "encode":
             src_ctx_item = torch.cat([bos_id, src_ctx_item, eos_id])
-        else:
+        elif src_ctx_item.size(0) > 0:
             src_item = torch.cat([src_ctx_item, brk_id, src_item])
         tgt_ctx_item = torch.Tensor().long()
-        brk_id = torch.Tensor([self.src_dict.index("<brk>")]).long()
-        for i in range(min(self.tgt_ctx_size, index) + 1):
+        for i in range(min(self.tgt_ctx_size, index + 1)):
             tgt_ctx_item = torch.cat([self.c_tgts[index - i], tgt_ctx_item])
-        tgt_item = torch.cat([tgt_ctx_item, brk_id, tgt_item])
+        if tgt_ctx_item.size(0) > 0:
+            tgt_item = torch.cat([tgt_ctx_item, brk_id, tgt_item])
           
         if self.ctx_method == "encode":
             return {"id": index, "source": src_item, "context": src_ctx_item, "target": tgt_item}

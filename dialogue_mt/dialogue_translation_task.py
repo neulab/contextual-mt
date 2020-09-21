@@ -11,6 +11,8 @@ from fairseq.tasks.translation import TranslationTask
 from fairseq.data import encoders, indexed_dataset, data_utils
 
 from dialogue_mt import DialogueLangPairDataset
+from .contrastive_lang_pair_dataset import ContrastiveDataset
+
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +28,7 @@ class DialogueTranslationTask(TranslationTask):
                         however, valid and test data are always in the first directory to \
                         avoid the need for repeating them in all directories",
         )
+#        parser.add_argument("--contra", default=None, type=str)
         parser.add_argument(
             "--left-pad-source",
             default="True",
@@ -143,7 +146,7 @@ class DialogueTranslationTask(TranslationTask):
     def load_dataset(self, split, **kwargs):
         """Loads a dataset
         Args:
-            split (str): the split to load (train/valid/test)
+            split (str): the split to load (train/valid/test/contra)
         """
 
         def binarize(s, speaker=None):
@@ -216,7 +219,6 @@ class DialogueTranslationTask(TranslationTask):
             left_pad_source=self.args.left_pad_source,
             left_pad_target=self.args.left_pad_target,
         )
-
     def build_model(self, args):
         model = FairseqTask.build_model(self, args)
         if getattr(args, "eval_bleu", False):
@@ -278,3 +280,137 @@ class DialogueTranslationTask(TranslationTask):
                     beam["positional_scores"] = beam["positional_scores"][brk_id + 1 :]
 
         return batched_output
+
+    def load_contra(self, **kwargs):
+        """Loads contrastive dataset
+        """
+
+        def binarize(s, speaker=None):
+            """ binarizes a sentence by applying bpe and tokenization and adding a speaker tag """
+            if self.bpe is not None:
+                s = self.bpe.encode(s)
+            tokens = self.src_dict.encode_line(
+                s, append_eos=False, add_if_not_exist=False
+            ).long()
+            if speaker is not None:
+                spk_tensor = torch.Tensor([self.src_dict.index(speaker)]).long()
+                tokens = torch.cat([spk_tensor, tokens])
+            return tokens
+
+        with open(self.args.contra + ".context.src", 'r', encoding='utf-8') as file:
+            src_cxt = file.read().splitlines() 
+        with open(self.args.contra + ".context.trg", 'r', encoding='utf-8') as file:
+            tgt_cxt = file.read().splitlines() 
+        with open(self.args.contra + ".current.src", 'r', encoding='utf-8') as file:
+            src = file.read().splitlines() 
+        with open(self.args.contra + ".current.trg", 'r', encoding='utf-8') as file:
+            tgt = file.read().splitlines() 
+
+        src_bin_file = os.path.join(self.args.data, "contra.src.bin")
+        tgt_bin_file = os.path.join(self.args.data, "contra.tgt.bin")
+        src_ds = indexed_dataset.make_builder(src_bin_file, self.args.dataset_impl)
+        tgt_ds = indexed_dataset.make_builder(tgt_bin_file, self.args.dataset_impl)
+        c_src_bin_file = os.path.join(self.args.data, "contra.c_src.bin")
+        c_tgt_bin_file = os.path.join(self.args.data, "contra.c_tgt.bin")
+        c_src_ds = indexed_dataset.make_builder(c_src_bin_file, self.args.dataset_impl)
+        c_tgt_ds = indexed_dataset.make_builder(c_tgt_bin_file, self.args.dataset_impl)
+
+        for s, t, c_s, c_t in zip(src, tgt, src_cxt, tgt_cxt):
+            src_ds.add_item(binarize(s, "<en>"))
+            tgt_ds.add_item(binarize(t))
+            c_src_ds.add_item(binarize(c_s, "<en>"))
+            c_tgt_ds.add_item(binarize(c_t))
+
+        src_idx_file = os.path.join(self.args.data, "contra.src.idx")
+        tgt_idx_file = os.path.join(self.args.data, "contra.tgt.idx")
+        src_ds.finalize(src_idx_file)
+        tgt_ds.finalize(tgt_idx_file)
+        c_src_idx_file = os.path.join(self.args.data, "contra.c_src.idx")
+        c_tgt_idx_file = os.path.join(self.args.data, "contra.c_tgt.idx")
+        c_src_ds.finalize(c_src_idx_file)
+        c_tgt_ds.finalize(c_tgt_idx_file)
+
+        src_ds = data_utils.load_indexed_dataset(
+            os.path.join(self.args.data, "contra.src"),
+            self.src_dict,
+            self.args.dataset_impl,
+        )
+        tgt_ds = data_utils.load_indexed_dataset(
+            os.path.join(self.args.data, "contra.tgt"),
+            self.tgt_dict,
+            self.args.dataset_impl,
+        )
+        c_src_ds = data_utils.load_indexed_dataset(
+            os.path.join(self.args.data, "contra.c_src"),
+            self.src_dict,
+            self.args.dataset_impl,
+        )
+        c_tgt_ds = data_utils.load_indexed_dataset(
+            os.path.join(self.args.data, "contra.c_tgt"),
+            self.tgt_dict,
+            self.args.dataset_impl,
+        )
+
+        # TODO: need to add speaker tags
+        self.datasets["contra"] = ContrastiveDataset(
+            src_ds,
+            src_ds.sizes,
+            self.src_dict,
+            tgt_ds,
+            tgt_ds.sizes,
+            self.tgt_dict,
+            c_src_ds,
+            c_src_ds.sizes,
+            c_tgt_ds,
+            c_tgt_ds.sizes,
+            ctx_method=self.args.context_method,
+            src_ctx_size=self.args.source_context_size,
+            tgt_ctx_size=self.args.target_context_size,
+            shuffle=True,
+        )
+
+    def contra_step(self, generator, models, sample, prefix_tokens=None, constraints=None):
+        with torch.no_grad():
+            net_input = sample["net_input"]
+
+            if 'src_tokens' in net_input:
+                src_tokens = net_input['src_tokens']
+                # length of the source text being the character length except EndOfSentence and pad
+                src_lengths = (src_tokens.ne(self.src_dict.eos()) & src_tokens.ne(self.src_dict.pad())).long().sum(dim=1)
+            elif 'source' in net_input:
+                src_tokens = net_input['source']
+                src_lengths = (
+                    net_input['padding_mask'].size(-1) - net_input['padding_mask'].sum(-1)
+                    if net_input['padding_mask'] is not None
+                    else torch.tensor(src_tokens.size(-1)).to(src_tokens)
+                )
+            else:
+                raise Exception('expected src_tokens or source in net input')
+
+            tgt_tokens = sample['target']
+            # length of the source text being the character length except EndOfSentence and pad
+            tgt_lengths = (tgt_tokens.ne(self.tgt_dict.eos()) & tgt_tokens.ne(self.tgt_dict.pad())).long().sum(dim=1)
+
+            max_len = tgt_lengths.max().item()
+
+            encoder_outs = models.forward_encoder(net_input)
+            tokens = (
+                torch.zeros(bsz * beam_size, max_len + 2)
+                .to(src_tokens)
+                .long()
+                .fill_(self.pad)
+            )  # +2 for eos and pad
+            tokens[:, 0] = self.eos if bos_token is None else bos_token
+            attn: Optional[Tensor] = None
+
+            for step in range(max_len + 1):  # one extra step for EOS marker
+                lprobs, avg_attn_scores = models.forward_decoder(
+                    tokens[:, : step + 1],
+                    encoder_outs,
+                    incremental_states,
+                    self.temperature,
+                )
+                print("lprobs ", lprobs.size)
+                print("target ", tgt_tokens.size)
+                raise ValueError
+
