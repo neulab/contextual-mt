@@ -64,6 +64,12 @@ def main():
         help=("number of chats to inference in parallel"),
     )
     parser.add_argument(
+        "--ignore-previous-targets",
+        default=False,
+        action="store_true",
+        help="if set, model will ignore previously generated targets and re-generate a new context",
+    )
+    parser.add_argument(
         "--print-output",
         type=str,
         default=None,
@@ -177,7 +183,7 @@ def main():
         # run inference
         sample = {
             "net_input": {"src_tokens": src_tokens, "src_lengths": src_lengths},
-            "target": targets.long(),
+            "target": targets.long() if not args.ignore_previous_targets else None,
         }
         sample = utils.move_to_cuda(sample)
         output = pretrained["task"].inference_step(generator, models, sample)
