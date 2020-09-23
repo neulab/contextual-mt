@@ -24,7 +24,7 @@ class DialogueDataset(LanguagePairDataset):
         self.src_ctx_size = src_ctx_size
         self.tgt_ctx_size = tgt_ctx_size
         self.concat_source_context = concat_source_context
-        self.concat_target_context =concat_target_context
+        self.concat_target_context = concat_target_context
 
         # recompute sizes  based on context size and special tokens
         full_src_sizes, full_tgt_sizes = [], []
@@ -36,7 +36,6 @@ class DialogueDataset(LanguagePairDataset):
             for j in range(1, min(self.tgt_ctx_size, self.ids[i]) + 1):
                 size += tgt_sizes[i - j] + 1
             full_tgt_sizes.append(size + 1)
-
 
         super().__init__(
             srcs,
