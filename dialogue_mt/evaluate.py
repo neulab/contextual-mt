@@ -90,6 +90,7 @@ def main():
     bpe = pretrained["task"].bpe
     vocab = pretrained["task"].src_dict
     tokenizer = pretrained["task"].tokenizer
+    split_source_context = pretrained["task"].args.split_source_context
     source_context_size = pretrained["task"].args.source_context_size
     target_context_size = pretrained["task"].args.target_context_size
     generator = pretrained["task"].build_generator(models, args)
@@ -127,6 +128,8 @@ def main():
     tgt_context = [[] for _ in range(args.batch_size)]
     current_chats = [[] for _ in range(args.batch_size)]
     while True:
+        src_ctx_tokens = []
+        src_ctx_lengths = []
         src_tokens = []
         src_lengths = []
         targets = []
@@ -163,10 +166,22 @@ def main():
                 for i in [*ctx, torch.tensor(vocab.index("<brk>"))]
             ]
 
-            src_tokens.append(
-                torch.stack([*src_ctx_ids, *src_ids, torch.tensor(vocab.eos())])
-            )
-            src_lengths.append(len(src_tokens[-1]))
+            # if context separate from source, encode in different tensors (removing the last break)
+            if split_source_context:
+                src_ctx_tokens.append(
+                    torch.stack([*src_ctx_ids[:-1], torch.tensor(vocab.eos())])
+                )
+                src_ctx_lengths.append(len(src_ctx_tokens[-1]))
+                src_tokens.append(torch.stack([*src_ids, torch.tensor(vocab.eos())]))
+                src_lengths.append(len(src_tokens[-1]))
+            # otherwise just concat with source
+            else:
+                src_tokens.append(
+                    torch.stack([*src_ctx_ids, *src_ids, torch.tensor(vocab.eos())])
+                )
+                src_lengths.append(len(src_tokens[-1]))
+
+            # TODO: add split_target_context
             targets.append(
                 torch.stack(tgt_ctx_ids) if tgt_ctx_ids else torch.tensor([])
             )
@@ -180,11 +195,20 @@ def main():
         src_lengths = torch.tensor(src_lengths)
         targets = data_utils.collate_tokens(targets, vocab.pad(), vocab.eos())
 
-        # run inference
+        # build batch and run inference
         sample = {
             "net_input": {"src_tokens": src_tokens, "src_lengths": src_lengths},
             "target": targets.long() if not args.ignore_previous_targets else None,
         }
+        if split_source_context:
+            src_ctx_tokens = data_utils.collate_tokens(
+                src_ctx_tokens, vocab.pad(), vocab.eos()
+            ).long()
+            src_ctx_lengths = torch.tensor(src_ctx_lengths)
+            sample["net_input"].update(
+                {"src_context": src_ctx_tokens, "src_ctx_lengths": src_ctx_lengths}
+            )
+
         sample = utils.move_to_cuda(sample)
         output = pretrained["task"].inference_step(generator, models, sample)
         for idx in range(len(src_lengths)):
