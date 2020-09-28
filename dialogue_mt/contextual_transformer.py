@@ -124,14 +124,14 @@ class ContextualTransformerEncoder(TransformerEncoder):
             self.quant_noise = None
 
         if self.encoder_layerdrop > 0.0:
-            self.input_layers = LayerDropModuleList(p=self.encoder_layerdrop)
+            self.layers = LayerDropModuleList(p=self.encoder_layerdrop)
         else:
-            self.input_layers = nn.ModuleList([])
+            self.layers = nn.ModuleList([])
 
-        self.input_layers.extend(
+        self.layers.extend(
             [self.build_encoder_layer(args) for i in range(args.encoder_layers)]
         )
-        self.num_layers = len(self.input_layers)
+        self.num_layers = len(self.layers)
 
         if not args.share_context_layers:
             if self.encoder_layerdrop > 0.0:
@@ -146,7 +146,9 @@ class ContextualTransformerEncoder(TransformerEncoder):
                 ]
             )
         else:
-            self.context_layers = self.input_layers[:-1]
+            self.context_layers = self.layers[:-1]
+
+        self.num_context_layers = len(self.context_layers)
 
         if args.encoder_normalize_before:
             self.layer_norm = LayerNorm(embed_dim)
@@ -167,7 +169,7 @@ class ContextualTransformerEncoder(TransformerEncoder):
         x = x.transpose(0, 1)
         x_padding_mask = src_tokens.eq(self.padding_idx)
         x_encoder_states = [] if return_all_hiddens else None
-        for layer in self.input_layers[:-1]:
+        for layer in self.layers[:-1]:
             x = layer(x, x_padding_mask)
             if return_all_hiddens:
                 assert x_encoder_states is not None
@@ -190,7 +192,7 @@ class ContextualTransformerEncoder(TransformerEncoder):
         # and add that embedding to all x
         x = x + torch.unsqueeze(c_collapsed, dim=0)
 
-        x = self.input_layers[-1](x, x_padding_mask)
+        x = self.layers[-1](x, x_padding_mask)
         if return_all_hiddens:
             x_encoder_states.append(x)
 
@@ -205,6 +207,15 @@ class ContextualTransformerEncoder(TransformerEncoder):
             src_tokens=None,
             src_lengths=None,
         )
+
+    def upgrade_state_dict_named(self, state_dict, name):
+        state_dict = super().upgrade_state_dict_named(state_dict, name)
+        for i in range(self.num_context_layers):
+            # update layer norms
+            self.context_layers[i].upgrade_state_dict_named(
+                state_dict, "{}.context_layers.{}".format(name, i)
+            )
+        return state_dict
 
 
 @register_model_architecture("contextual_transformer", "contextual_transformer")
