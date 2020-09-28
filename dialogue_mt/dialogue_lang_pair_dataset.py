@@ -32,6 +32,7 @@ class DialogueDataset(LanguagePairDataset):
             for j in range(1, min(self.src_ctx_size, self.ids[i]) + 1):
                 size += src_sizes[i - j] + 1
             full_src_sizes.append(size + 1)
+        # FIXME: if target context is part of input, this needs to be rethinked
         for i, size in enumerate(tgt_sizes):
             for j in range(1, min(self.tgt_ctx_size, self.ids[i]) + 1):
                 size += tgt_sizes[i - j] + 1
@@ -105,6 +106,7 @@ class DialogueDataset(LanguagePairDataset):
                     for s in samples
                 ]
             )
+
             batch["net_input"].update(
                 {"src_context": src_context, "src_ctx_lengths": src_ctx_lengths}
             )
