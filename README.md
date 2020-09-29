@@ -27,17 +27,15 @@ To have access to the entrypoints (such as the evaluation script) in your path
 
 Most of the preprocessing is done as part of the trainining.
 
-The only thing needed is to train a bpe on the tokenized corpus. 
+The only thing needed is to train the sentencepiece model
 
 ```bash
 BPE_TOKENS=20000
 
-python flatten_chat.py $DATA_DIR/train.json | sacremoses normalize | sacremoses tokenize > /tmp/train.flat
-fast learnbpe $BPE_TOKENS /tmp/train.flat > $DATA_DIR/bpecodes
-fast applybpe /tmp/train.flat.$BPE_TOKENS /tmp/train.flat $DATA_DIR/bpecodes
-fast getvocab /tmp/train.flat.$BPE_TOKENS > $DATA_DIR/dict.txt
-python flatten_chat.py $DATA_DIR/train.json --print-speakers >> $DATA_DIR/dict.txt
-rm /tmp/train.flat /tmp/train.flat.$BPE_TOKENS 
+python scripts/spm_train.py $DATA_DIR/train.json \
+    --model-prefix $DATA_DIR/spm \
+    --vocab-file $DATA_DIR dict.txt \
+    --vocab-size $BPE_TOKENS
 ```
 
 ## Training
@@ -48,11 +46,15 @@ You can train using fairseq's training tool. Just select the `dialogue_translati
 fairseq-train $DATA_DIR \
     --user-dir dialogue_mt \
     --task dialogue_translation --source-context-size $N --target-context-size $M \
-    --tokenizer moses --bpe fastbpe --bpe-codes $DATA_DIR/bpecodes
+    --bpe sentencepiece --sentencepiece-model $DATA_DIR/spm.model \
     --arch transformer --share-all-embeddings \
     --optimizer adam --adam-betas '(0.9, 0.98)' --clip-norm 0.1 \
     --lr 7e-4 --lr-scheduler inverse_sqrt  --warmup-updates 4000 \
     --criterion label_smoothed_cross_entropy --label-smoothing 0.1 --dropout 0.3 --weight-decay 0.0001 \
+    --eval-bleu \
+    --eval-bleu-args '{"beam": 5, "max_len_a": 1.2, "max_len_b": 10}' \
+    --eval-bleu-remove-bpe sentencepiece \
+    --eval-bleu-print-samples \
     --max-tokens  4096 --update-freq 8 --patience 10 --seed 42 \
     --save-dir $CHECKPOINTS_DIR --no-epoch-checkpoints
 ```
@@ -65,5 +67,7 @@ You can then run evaluation by running
 cp $DATA_DIR/dict.txt $CHECKPOINTS_DIR
 dialogue-evaluate $DATA_DIR \
     --path $CHECKPOINTS_DIR --split test \
-    --batch-size 64 --beam 5
+    --batch-size 64 --beam 5 \
+    --comet-model wmt-large-da-estimator-1719 \
+    --comet-path $COMET_PATH 
 ```

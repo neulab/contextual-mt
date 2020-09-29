@@ -111,10 +111,16 @@ class DialogueTranslationTask(TranslationTask):
             help="number of previous target sentences/messages to include in the context",
         )
         parser.add_argument(
-            "--split-source-context", default=False, action="store_true"
+            "--split-source-context",
+            default=False,
+            action="store_true",
+            help="if set,  source and context will be passed as separate (batched) tensors to the model",
         )
         parser.add_argument(
-            "--split-target-context", default=False, action="store_true"
+            "--split-target-context",
+            default=False,
+            action="store_true",
+            help="if set,  target and context will be passed as separate (batched) tensors to the model",
         )
 
     def __init__(self, args, dictionary):
