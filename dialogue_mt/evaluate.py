@@ -1,13 +1,15 @@
 import argparse
 import os
 import json
-import sacrebleu
 import tqdm
 
 import torch
 
 from fairseq import utils, hub_utils
 from fairseq.data import data_utils
+
+import sacrebleu
+from comet.models import download_model
 
 
 def main():
@@ -70,6 +72,16 @@ def main():
         help="if set, model will ignore previously generated targets and re-generate a new context",
     )
     parser.add_argument(
+        "--comet-model",
+        default=None,
+        type=str,
+    )
+    parser.add_argument(
+        "--comet-path",
+        default=None,
+        type=str,
+    )
+    parser.add_argument(
         "--print-output",
         type=str,
         default=None,
@@ -99,14 +111,18 @@ def main():
 
     def encode(s):
         """ applies tokenization and bpe """
-        s = tokenizer.encode(s)
-        s = bpe.encode(s)
+        if tokenizer is not None:
+            s = tokenizer.encode(s)
+        if bpe is not None:
+            s = bpe.encode(s)
         return s
 
     def decode(x):
         """ removes bpe and detokenizes """
-        x = bpe.decode(x)
-        x = tokenizer.decode(x)
+        if bpe is not None:
+            x = bpe.decode(x)
+        if tokenizer is not None:
+            x = tokenizer.decode(x)
         return x
 
     def binarize(s, speaker):
@@ -121,6 +137,7 @@ def main():
         chat_dict = json.load(f)
 
     chat_list = list(chat_dict.values())
+    srcs = []
     refs = []
     preds = []
     bar = tqdm.tqdm(total=sum(1 for chat in chat_list for turn in chat))
@@ -147,6 +164,7 @@ def main():
             turn = current_chats[idx].pop(0)
 
             # normalize references to match the way `fairseq-generate` computes scores
+            srcs.append(turn["source"])
             refs.append(decode(encode(turn["target"])))
 
             # binarize source and create input with context and target
@@ -224,7 +242,23 @@ def main():
 
         bar.update(len(src_lengths))
 
+    bar.close()
+    # print BLEU
     print(sacrebleu.corpus_bleu(preds, [refs]).format())
+
+    if args.comet_model is not None:
+        assert (
+            args.comet_path is not None
+        ), "need to provide a path to download/load comet"
+        # download comet and load
+        comet_model = download_model(args.comet_model, args.comet_path)
+        print("running comet evaluation....")
+        comet_input = [
+            {"src": src, "mt": mt, "ref": ref}
+            for src, mt, ref in zip(srcs, preds, refs)
+        ]
+        _, scores = comet_model.predict(comet_input, cuda=True, show_progress=True)
+        print(f"COMET = {sum(scores)/len(scores):.4f}")
 
     if args.print_output is not None:
         with open(args.print_output, "w") as f:
