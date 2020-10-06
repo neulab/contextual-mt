@@ -13,6 +13,7 @@ def main():
     parser.add_argument("--model-prefix", type=str, required=True)
     parser.add_argument("--vocab-file", type=str, default=None)
     parser.add_argument("--vocab-size", type=int, default=32000)
+    parser.add_argument("--vocab-sample-size", type=int, default=None)
     parser.add_argument("--is-raw", action="store_true", default=False)
     parser.add_argument("--include-target", action="store_true", default=False)
     parser.add_argument("--special-symbols", type=str, nargs="+", default=[])
@@ -33,12 +34,21 @@ def main():
     else:
         raw_file = args.data
 
+    kwargs = {}
+    if args.vocab_sample_size is not None:
+        kwargs.update(
+            {
+                "input_sentence_size": args.vocab_sample_size,
+                "shuffle_input_sentence": True,
+            }
+        )
     spm.SentencePieceTrainer.Train(
         input=raw_file,
         model_prefix=args.model_prefix,
         model_type="bpe",
         vocab_size=args.vocab_size,
         user_defined_symbols=special_symbols,
+        **kwargs,
     )
 
     # since SentencePieces generates a dictionary non-compatible
