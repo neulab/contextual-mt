@@ -33,6 +33,7 @@ The only thing needed is to train the sentencepiece model
 BPE_TOKENS=20000
 
 python scripts/spm_train.py $DATA_DIR/train.json \
+    --include-target \
     --model-prefix $DATA_DIR/spm \
     --vocab-file $DATA_DIR dict.txt \
     --vocab-size $BPE_TOKENS
@@ -69,5 +70,5 @@ dialogue-evaluate $DATA_DIR \
     --path $CHECKPOINTS_DIR --split test \
     --batch-size 64 --beam 5 \
     --comet-model wmt-large-da-estimator-1719 \
-    --comet-path $COMET_PATH 
+    --comet-path $COMET_DIR 
 ```

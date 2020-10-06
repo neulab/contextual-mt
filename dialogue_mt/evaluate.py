@@ -8,6 +8,8 @@ import torch
 from fairseq import utils, hub_utils
 from fairseq.data import data_utils
 
+import dialogue_mt
+
 import sacrebleu
 from comet.models import download_model
 
@@ -72,6 +74,12 @@ def main():
         help="if set, model will ignore previously generated targets and re-generate a new context",
     )
     parser.add_argument(
+        "--gold-target-context",
+        default=False,
+        action="store_true",
+        help="if set, model will use ground-truth targets as context",
+    )
+    parser.add_argument(
         "--comet-model",
         default=None,
         type=str,
@@ -85,7 +93,13 @@ def main():
         "--print-output",
         type=str,
         default=None,
-        help="if set, saves the outpus to a file",
+        help="if set, saves the outpus to a file. ",
+    )
+    parser.add_argument(
+        "--output-format",
+        choices=["simple", "detailed"],
+        default="simple",
+        help="pass `detailed` to output to a jsonl with BLEU and COMET scores per utterance",
     )
 
     args = parser.parse_args()
@@ -125,25 +139,31 @@ def main():
             x = tokenizer.decode(x)
         return x
 
-    def binarize(s, speaker):
+    def binarize(s, speaker=None):
         """ binarizes a sentence by applying bpe and tokenization and adding a speaker tag """
         s = encode(s)
         tokens = vocab.encode_line(s, append_eos=False, add_if_not_exist=False).long()
-        spk_tensor = torch.tensor([vocab.index(speaker)])
-        tokens = torch.cat([spk_tensor, tokens])
+        if speaker is not None:
+            spk_tensor = torch.tensor([vocab.index(speaker)])
+            tokens = torch.cat([spk_tensor, tokens])
         return tokens
 
     with open(data_path, "r") as f:
         chat_dict = json.load(f)
 
     chat_list = list(chat_dict.values())
+    chat_idx = 0
     srcs = []
     refs = []
     preds = []
+    ids = []
+    scores = []
     bar = tqdm.tqdm(total=sum(1 for chat in chat_list for turn in chat))
     src_context = [[] for _ in range(args.batch_size)]
     tgt_context = [[] for _ in range(args.batch_size)]
-    current_chats = [[] for _ in range(args.batch_size)]
+    current_chats = [None for _ in range(args.batch_size)]
+    current_chats_id = [-1 for _ in range(args.batch_size)]
+    current_utters_id = [0 for _ in range(args.batch_size)]
     while True:
         src_ctx_tokens = []
         src_ctx_lengths = []
@@ -152,16 +172,22 @@ def main():
         targets = []
         for idx in range(args.batch_size):
             # if any of the chats in the batch has finished replace by a new one
-            if not current_chats[idx]:
-                if chat_list:
-                    current_chats[idx] = list(chat_list.pop(0))
+            if current_chats[idx] is None or current_utters_id[idx] >= len(
+                current_chats[idx]
+            ):
+                if chat_idx < len(chat_list):
+                    current_chats[idx] = chat_list[chat_idx]
+                    current_chats_id[idx] = chat_idx
+                    current_utters_id[idx] = 0
                     src_context[idx] = []
                     tgt_context[idx] = []
+                    chat_idx += 1
                 else:
                     current_chats[idx] = None
                     continue
 
-            turn = current_chats[idx].pop(0)
+            turn = current_chats[idx][current_utters_id[idx]]
+            ids.append((current_chats_id[idx], current_utters_id[idx]))
 
             # normalize references to match the way `fairseq-generate` computes scores
             srcs.append(turn["source"])
@@ -176,13 +202,28 @@ def main():
                 ]
                 for i in [*ctx, torch.tensor(vocab.index("<brk>"))]
             ]
-            tgt_ctx_ids = [
-                i
-                for ctx in tgt_context[idx][
-                    len(tgt_context[idx]) - target_context_size :
+            if args.gold_target_context:
+                gold_tgt_context = [
+                    current_chats[idx][current_utters_id[idx] - i]["target"]
+                    for i in range(
+                        1, min(target_context_size, current_utters_id[idx]) + 1
+                    )
                 ]
-                for i in [*ctx, torch.tensor(vocab.index("<brk>"))]
-            ]
+
+                gold_tgt_context = [binarize(ctx) for ctx in gold_tgt_context]
+                tgt_ctx_ids = [
+                    i
+                    for ctx in gold_tgt_context
+                    for i in [*ctx, torch.tensor(vocab.index("<brk>"))]
+                ]
+            else:
+                tgt_ctx_ids = [
+                    i
+                    for ctx in tgt_context[idx][
+                        len(tgt_context[idx]) - target_context_size :
+                    ]
+                    for i in [*ctx, torch.tensor(vocab.index("<brk>"))]
+                ]
 
             # if context separate from source, encode in different tensors (removing the last break)
             if split_source_context:
@@ -204,6 +245,8 @@ def main():
                 torch.stack(tgt_ctx_ids) if tgt_ctx_ids else torch.tensor([])
             )
             src_context[idx].append(src_ids)
+
+            current_utters_id[idx] += 1
 
         # while exit condition
         if all(chat is None for chat in current_chats):
@@ -234,7 +277,7 @@ def main():
             hyp_ids = output[idx][0]["tokens"].cpu()
             hyp_str = vocab.string(hyp_ids.int())
             preds.append(decode(hyp_str))
-
+            scores.append(output[idx][0]["positional_scores"].cpu().tolist())
             # collect output to be prefix for next utterance
             tgt_context[idx].append(
                 hyp_ids[:-1] if hyp_ids[-1] == vocab.eos() else hyp_ids
@@ -257,13 +300,38 @@ def main():
             {"src": src, "mt": mt, "ref": ref}
             for src, mt, ref in zip(srcs, preds, refs)
         ]
-        _, scores = comet_model.predict(comet_input, cuda=True, show_progress=True)
-        print(f"COMET = {sum(scores)/len(scores):.4f}")
+        _, comet_scores = comet_model.predict(
+            comet_input, cuda=True, show_progress=True
+        )
+        print(f"COMET = {sum(comet_scores)/len(comet_scores):.4f}")
 
     if args.print_output is not None:
         with open(args.print_output, "w") as f:
-            for hyp in preds:
-                print(hyp, file=f)
+            if args.output_format == "simple":
+                for _, hyp in sorted(zip(ids, preds), key=lambda p: p[0]):
+                    print(hyp, file=f)
+            if args.output_format == "detailed":
+                if args.comet_model:
+                    lines = zip(ids, srcs, refs, preds, scores, comet_scores)
+                else:
+                    lines = zip(ids, srcs, refs, preds, scores)
+
+                lines = sorted(lines, key=lambda p: p[0])
+                for info in lines:
+                    bleu = sacrebleu.sentence_bleu(info[3], [info[2]])
+                    info_json = {
+                        "chat_id": info[0][0],
+                        "utter_id": info[0][1],
+                        "src": info[1],
+                        "ref": info[2],
+                        "pred": info[3],
+                        "scores": info[4],
+                        "bleu": bleu.score,
+                    }
+                    if args.comet_model:
+                        info_json["comet"] = info[5]
+
+                    print(json.dumps(info_json), file=f)
 
 
 if __name__ == "__main__":
