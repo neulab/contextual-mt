@@ -8,7 +8,7 @@ import torch
 from fairseq import utils, hub_utils
 from fairseq.data import data_utils
 
-import dialogue_mt
+import dialogue_mt # noqa: F401
 
 import sacrebleu
 from comet.models import download_model

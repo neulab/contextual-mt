@@ -1,7 +1,5 @@
 import argparse
 import sys
-import tempfile
-from itertools import takewhile
 
 import sentencepiece as spm
 
