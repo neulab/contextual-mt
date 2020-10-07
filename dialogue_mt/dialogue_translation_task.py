@@ -10,8 +10,7 @@ from fairseq.tasks import register_task, FairseqTask
 from fairseq.tasks.translation import TranslationTask
 from fairseq.data import encoders, indexed_dataset, data_utils
 
-from dialogue_mt import DialogueLangPairDataset
-from .contrastive_lang_pair_dataset import ContrastiveDataset
+from dialogue_mt import DialogueDataset
 
 logger = logging.getLogger(__name__)
 
@@ -111,6 +110,18 @@ class DialogueTranslationTask(TranslationTask):
             type=int,
             help="number of previous target sentences/messages to include in the context",
         )
+        parser.add_argument(
+            "--split-source-context",
+            default=False,
+            action="store_true",
+            help="if set,  source and context will be passed as separate (batched) tensors to the model",
+        )
+        parser.add_argument(
+            "--split-target-context",
+            default=False,
+            action="store_true",
+            help="if set,  target and context will be passed as separate (batched) tensors to the model",
+        )
 
         parser.add_argument(
             "--context-method",
@@ -121,6 +132,7 @@ class DialogueTranslationTask(TranslationTask):
 
     def __init__(self, args, dictionary):
         super().__init__(args, dictionary, dictionary)
+        self.dictionary = dictionary
         self.bpe = encoders.build_bpe(args)
         self.tokenizer = encoders.build_tokenizer(args)
 
@@ -151,11 +163,11 @@ class DialogueTranslationTask(TranslationTask):
             """ binarizes a sentence by applying bpe and tokenization and adding a speaker tag """
             if self.bpe is not None:
                 s = self.bpe.encode(s)
-            tokens = self.src_dict.encode_line(
+            tokens = self.dictionary.encode_line(
                 s, append_eos=False, add_if_not_exist=False
             ).long()
             if speaker is not None:
-                spk_tensor = torch.Tensor([self.src_dict.index(speaker)]).long()
+                spk_tensor = torch.Tensor([self.dictionary.index(speaker)])
                 tokens = torch.cat([spk_tensor, tokens])
             return tokens
 
@@ -188,23 +200,22 @@ class DialogueTranslationTask(TranslationTask):
 
         src_ds = data_utils.load_indexed_dataset(
             os.path.join(self.args.data, f"{split}.src-tgt.src"),
-            self.src_dict,
+            self.dictionary,
             self.args.dataset_impl,
         )
         tgt_ds = data_utils.load_indexed_dataset(
             os.path.join(self.args.data, f"{split}.src-tgt.tgt"),
-            self.tgt_dict,
+            self.dictionary,
             self.args.dataset_impl,
         )
 
         # TODO: need to add speaker tags
-        self.datasets[split] = DialogueLangPairDataset(
+        self.datasets[split] = DialogueDataset(
             src_ds,
             src_ds.sizes,
-            self.src_dict,
             tgt_ds,
             tgt_ds.sizes,
-            self.tgt_dict,
+            self.dictionary,
             ids,
             ctx_method=self.args.context_method,
             src_ctx_size=self.args.source_context_size,
@@ -212,6 +223,8 @@ class DialogueTranslationTask(TranslationTask):
             shuffle=True,
             left_pad_source=self.args.left_pad_source,
             left_pad_target=self.args.left_pad_target,
+            concat_source_context=not self.args.split_source_context,
+            concat_target_context=not self.args.split_target_context,
         )
 
     def build_model(self, args):
@@ -230,17 +243,19 @@ class DialogueTranslationTask(TranslationTask):
             prefix_tokens is None
         ), "dialogue translation task currently doesn't support prefix tokens"
 
-        context = None
-        if self.args.target_context_size > 0 and sample["target"] is not None:
+        def find_index(target):
+            brk_indices = torch.nonzero(target == self.dictionary.index("<brk>"))
+            return brk_indices[-1][0] if len(brk_indices) > 0 else -1
+
+        context, idxs = None, None
+        if (
+            self.args.target_context_size > 0 and not self.args.split_target_context
+        ) and sample["target"] is not None:
             context, target, idxs = [], [], []
             for full_tgt in sample["target"]:
                 # for each sample in the batch, strip the padding
-                stripped_tgt = utils.strip_pad(full_tgt, pad=self.tgt_dict.pad())
-                # find the latest <brk> token and split the target on it
-                brk_indices = torch.nonzero(
-                    stripped_tgt == self.tgt_dict.index("<brk>")
-                )
-                brk_index = brk_indices[-1][0] if len(brk_indices) > 0 else -1
+                stripped_tgt = utils.strip_pad(full_tgt, pad=self.dictionary.pad())
+                brk_index = find_index(stripped_tgt)
                 ctx, tgt = stripped_tgt[: brk_index + 1], stripped_tgt[brk_index + 1 :]
                 # and redo the batch, saving the indexes used for splitting for later
                 target.append(tgt)
@@ -249,10 +264,10 @@ class DialogueTranslationTask(TranslationTask):
 
             # tensorize splitted target/context again and set new target
             context = data_utils.collate_tokens(
-                context, self.tgt_dict.pad(), self.tgt_dict.eos()
+                context, self.dictionary.pad(), self.dictionary.eos()
             )
             target = data_utils.collate_tokens(
-                target, self.tgt_dict.pad(), self.tgt_dict.eos()
+                target, self.dictionary.pad(), self.dictionary.eos()
             )
             sample["target"] = target
         else:
@@ -266,9 +281,14 @@ class DialogueTranslationTask(TranslationTask):
                 constraints=constraints,
             )
 
-        if self.args.target_context_size > 0:
-            for brk_id, output in zip(idxs, batched_output):
+        if self.args.target_context_size > 0 and not self.args.split_target_context:
+            for i, output in enumerate(batched_output):
                 for beam in output:
+                    if idxs is not None:
+                        brk_id = idxs[i]
+                    else:
+                        brk_id = find_index(beam["tokens"])
+
                     # for each beam in each sample, remove the context and associated atributes
                     beam["tokens"] = beam["tokens"][brk_id + 1 :]
                     beam["attention"] = beam["attention"][brk_id + 1 :]

@@ -2,10 +2,10 @@
 #
 #SBATCH --gres=gpu:1
 #SBATCH --mem=16000
-#SBATCH --output=outputs/two_plus_one_enfr.out
+#SBATCH --output=outputs/two_plus_two_enfr.out
 #SBATCH --time=0
 
-EXPERIMENT_NAME=two_plus_one_enfr
+EXPERIMENT_NAME=two_plus_two_enfr
 REPO=/home/pfernand/repos/dialogue-mt
 DATA_DIR=/projects/tir5/users/patrick/data/opensub/enfr
 CHECKPOINT_DIR=/projects/tir5/users/patrick/checkpoints/${EXPERIMENT_NAME}
@@ -13,8 +13,8 @@ CHECKPOINT_DIR=/projects/tir5/users/patrick/checkpoints/${EXPERIMENT_NAME}
 srun fairseq-train \
     $DATA_DIR --user-dir $REPO/dialogue_mt \
     --task dialogue_translation \
-    --tokenizer moses --bpe fastbpe --bpe-codes $DATA_DIR/bpecodes \
-    --source-context-size 1 --target-context-size 0 \
+    --bpe sentencepiece --sentencepiece-model $DATA_DIR/spm.model \
+    --source-context-size 1 --target-context-size 1 \
     --log-interval 10 \
     --arch transformer --share-decoder-input-output-embed  \
     --optimizer adam --adam-betas '(0.9, 0.98)' --clip-norm 0.1 \
@@ -23,7 +23,7 @@ srun fairseq-train \
     --max-tokens  4096 --update-freq 8 --patience 10 --seed 42 \
     --eval-bleu \
     --eval-bleu-args '{"beam": 5, "max_len_a": 1.2, "max_len_b": 10}' \
-    --eval-bleu-remove-bpe \
+    --eval-bleu-remove-bpe sentencepieces \
     --eval-bleu-print-samples \
     --best-checkpoint-metric bleu --maximize-best-checkpoint-metric \
     --save-dir $CHECKPOINT_DIR --no-epoch-checkpoints
@@ -35,3 +35,6 @@ srun dialogue-evaluate $DATA_DIR \
     --split test \
     --batch-size 64 \
     --beam 5
+    --comet-model wmt-large-da-estimator-1719 \
+    --comet-path $COMET_DIR \
+    --ignore-previous-targets

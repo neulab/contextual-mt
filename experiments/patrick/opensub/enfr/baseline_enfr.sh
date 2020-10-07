@@ -13,7 +13,7 @@ CHECKPOINT_DIR=/projects/tir5/users/patrick/checkpoints/${EXPERIMENT_NAME}
 srun fairseq-train \
     $DATA_DIR --user-dir $REPO/dialogue_mt \
     --task dialogue_translation \
-    --tokenizer moses --bpe fastbpe --bpe-codes $DATA_DIR/bpecodes \
+    --bpe sentencepiece --sentencepiece-model $DATA_DIR/spm.model \
     --source-context-size 0 --target-context-size 0 \
     --log-interval 10 \
     --arch transformer --share-decoder-input-output-embed  \
@@ -23,7 +23,7 @@ srun fairseq-train \
     --max-tokens  4096 --update-freq 8 --patience 10 --seed 42 \
     --eval-bleu \
     --eval-bleu-args '{"beam": 5, "max_len_a": 1.2, "max_len_b": 10}' \
-    --eval-bleu-remove-bpe \
+    --eval-bleu-remove-bpe sentencepiece \
     --eval-bleu-print-samples \
     --best-checkpoint-metric bleu --maximize-best-checkpoint-metric \
     --save-dir $CHECKPOINT_DIR --no-epoch-checkpoints
