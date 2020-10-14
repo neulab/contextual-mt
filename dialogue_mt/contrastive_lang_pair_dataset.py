@@ -1,6 +1,5 @@
 import torch
-from fairseq.data import LanguagePairDataset
-from .collaters import Seq2SeqCollater
+from fairseq.data import data_utils, LanguagePairDataset
 
 
 class ContrastiveDataset(LanguagePairDataset):
@@ -87,7 +86,6 @@ class ContrastiveDataset(LanguagePairDataset):
         return batch
 
     def __getitem__(self, index):
-        bos_id = torch.Tensor([self.src_dict.bos()]).long()
         eos_id = torch.Tensor([self.src_dict.eos()]).long()
         src_item = torch.cat([self.src[index], eos_id])
         tgt_item = torch.cat([self.tgt[index], eos_id])

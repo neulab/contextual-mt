@@ -7,11 +7,9 @@
 Train a new model on one or across multiple GPUs.
 """
 
-import argparse
 import logging
 import math
 import os
-import random
 import sys
 
 import numpy as np

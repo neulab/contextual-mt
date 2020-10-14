@@ -1,15 +1,9 @@
-import os, json, logging, math
+import logging
+import math
 import torch
-from fairseq import checkpoint_utils, data, options, tasks, utils, scoring
-from fairseq.data import Dictionary, encoders
-from fairseq.sequence_generator import SequenceGenerator
+from fairseq import checkpoint_utils, options, tasks, utils
 from fairseq.sequence_scorer import SequenceScorer
 from fairseq.logging import progress_bar
-from fairseq.logging.meters import StopwatchMeter, TimeMeter
-
-from torch.utils.data import DataLoader
-from tqdm import tqdm
-import sacrebleu
 
 logger = logging.getLogger()
 
@@ -34,10 +28,6 @@ def main():
     task.load_contra()
 
     # Set dictionaries
-    try:
-        src_dict = getattr(task, "source_dictionary", None)
-    except NotImplementedError:
-        src_dict = None
     tgt_dict = task.target_dictionary
 
     # Load ensemble
@@ -54,10 +44,6 @@ def main():
         model.half()
     if use_cuda:
         model.cuda()
-
-    # Load alignment dictionary for unknown word replacement
-    # (None if no unknown word replacement, empty if no path to align dictionary)
-    align_dict = utils.load_align_dict(args.replace_unk)
 
     # Load dataset (possibly sharded)
     itr = task.get_batch_iterator(

@@ -3,7 +3,6 @@ from collections import defaultdict
 import json
 import os
 import logging
-import csv
 import matplotlib.pyplot as plt
 import numpy as np
 import math
