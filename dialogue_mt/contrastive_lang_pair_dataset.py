@@ -86,7 +86,6 @@ class ContrastiveDataset(LanguagePairDataset):
             )
         return batch
 
-
     def __getitem__(self, index):
         bos_id = torch.Tensor([self.src_dict.bos()]).long()
         eos_id = torch.Tensor([self.src_dict.eos()]).long()
@@ -110,7 +109,7 @@ class ContrastiveDataset(LanguagePairDataset):
 
         src_item = torch.cat([src_item, eos_id])
         tgt_item = torch.cat([tgt_item, eos_id])
-        
+
         sample = {"id": index}
         if self.concat_source_context:
             if len(src_ctx_item) > 0:
@@ -128,4 +127,3 @@ class ContrastiveDataset(LanguagePairDataset):
             sample["target"] = tgt_item
 
         return sample
-          

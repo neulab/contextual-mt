@@ -5,7 +5,7 @@ import os
 import logging
 import csv
 import matplotlib.pyplot as plt
-import numpy as np 
+import numpy as np
 import math
 import torch
 
@@ -21,6 +21,7 @@ from .contrastive_lang_pair_dataset import ContrastiveDataset
 logger = logging.getLogger(__name__)
 
 EVAL_BLEU_ORDER = 4
+
 
 @register_task("dialogue_translation")
 class DialogueTranslationTask(TranslationTask):
@@ -247,32 +248,31 @@ class DialogueTranslationTask(TranslationTask):
             )
         return model
 
-
     def valid_step(self, sample, model, criterion):
         model.eval()
         with torch.no_grad():
             loss, sample_size, logging_output = criterion(model, sample)
         if self.args.eval_bleu:
             bleu = self._inference_with_bleu(self.sequence_generator, sample, model)
-            logging_output['_bleu_sys_len'] = bleu.sys_len
-            logging_output['_bleu_ref_len'] = bleu.ref_len
+            logging_output["_bleu_sys_len"] = bleu.sys_len
+            logging_output["_bleu_ref_len"] = bleu.ref_len
             # we split counts into separate entries so that they can be
             # summed efficiently across workers using fast-stat-sync
             assert len(bleu.counts) == EVAL_BLEU_ORDER
             for i in range(EVAL_BLEU_ORDER):
-                logging_output['_bleu_counts_' + str(i)] = bleu.counts[i]
-                logging_output['_bleu_totals_' + str(i)] = bleu.totals[i]
+                logging_output["_bleu_counts_" + str(i)] = bleu.counts[i]
+                logging_output["_bleu_totals_" + str(i)] = bleu.totals[i]
         if self.args.datamap:
             hypos = self.scorer.generate([model], sample)
-            for i, sample_id in enumerate(sample['id'].tolist()):
+            for i, sample_id in enumerate(sample["id"].tolist()):
                 hypo = hypos[i][0]
-                self.scores[sample_id].append(hypo['score'].item() / math.log(2))
+                self.scores[sample_id].append(hypo["score"].item() / math.log(2))
         return loss, sample_size, logging_output
 
     def create_datamap(self):
-        with open(os.path.join(self.args.save_dir, "data.csv"), 'w') as f:
+        with open(os.path.join(self.args.save_dir, "data.csv"), "w") as f:
             for key in self.scores.keys():
-                f.write("%s,%s\n"%(key,self.scores[key]))
+                f.write("%s,%s\n" % (key, self.scores[key]))
 
         indices = []
         variability = []
@@ -287,8 +287,6 @@ class DialogueTranslationTask(TranslationTask):
         for i, txt in enumerate(indices):
             ax.annotate(txt, (variability[i], confidence[i]))
         fig.savefig(os.path.join(self.args.save_dir, "data.png"))
-
-
 
     def inference_step(
         self, generator, models, sample, prefix_tokens=None, constraints=None
@@ -349,8 +347,7 @@ class DialogueTranslationTask(TranslationTask):
         return batched_output
 
     def load_contra(self, **kwargs):
-        """Loads contrastive dataset
-        """
+        """Loads contrastive dataset"""
 
         def binarize(s, speaker=None):
             """ binarizes a sentence by applying bpe and tokenization and adding a speaker tag """
@@ -364,14 +361,14 @@ class DialogueTranslationTask(TranslationTask):
                 tokens = torch.cat([spk_tensor, tokens])
             return tokens
 
-        with open(self.args.contra + ".context.src", 'r', encoding='utf-8') as file:
-            src_cxt = file.read().splitlines() 
-        with open(self.args.contra + ".context.trg", 'r', encoding='utf-8') as file:
-            tgt_cxt = file.read().splitlines() 
-        with open(self.args.contra + ".current.src", 'r', encoding='utf-8') as file:
-            src = file.read().splitlines() 
-        with open(self.args.contra + ".current.trg", 'r', encoding='utf-8') as file:
-            tgt = file.read().splitlines() 
+        with open(self.args.contra + ".context.src", "r", encoding="utf-8") as file:
+            src_cxt = file.read().splitlines()
+        with open(self.args.contra + ".context.trg", "r", encoding="utf-8") as file:
+            tgt_cxt = file.read().splitlines()
+        with open(self.args.contra + ".current.src", "r", encoding="utf-8") as file:
+            src = file.read().splitlines()
+        with open(self.args.contra + ".current.trg", "r", encoding="utf-8") as file:
+            tgt = file.read().splitlines()
 
         src_bin_file = os.path.join(self.args.data, "contra.src.bin")
         tgt_bin_file = os.path.join(self.args.data, "contra.tgt.bin")

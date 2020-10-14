@@ -13,11 +13,18 @@ import sacrebleu
 
 logger = logging.getLogger()
 
+
 def main():
     # Parse command-line arguments for generation
     parser = options.get_generation_parser()
-    parser.add_argument('--contra', default='/projects/tir4/users/kayoy/dialogue-translation/OpenSubs/one')
-    parser.add_argument('--output', default='/projects/tir4/users/kayoy/dialogue-translation/dialogue-mt/contra/pred.txt')
+    parser.add_argument(
+        "--contra",
+        default="/projects/tir4/users/kayoy/dialogue-translation/OpenSubs/one",
+    )
+    parser.add_argument(
+        "--output",
+        default="/projects/tir4/users/kayoy/dialogue-translation/dialogue-mt/contra/pred.txt",
+    )
     args = options.parse_args_and_arch(parser)
 
     use_cuda = torch.cuda.is_available() and not args.cpu
@@ -28,13 +35,13 @@ def main():
 
     # Set dictionaries
     try:
-        src_dict = getattr(task, 'source_dictionary', None)
+        src_dict = getattr(task, "source_dictionary", None)
     except NotImplementedError:
         src_dict = None
     tgt_dict = task.target_dictionary
 
     # Load ensemble
-    logger.info('loading model(s) from {}'.format(args.path))
+    logger.info("loading model(s) from {}".format(args.path))
     models, _model_args = checkpoint_utils.load_model_ensemble(
         utils.split_paths(args.path),
         arg_overrides=eval(args.model_overrides),
@@ -48,7 +55,6 @@ def main():
     if use_cuda:
         model.cuda()
 
-        
     # Load alignment dictionary for unknown word replacement
     # (None if no unknown word replacement, empty if no path to align dictionary)
     align_dict = utils.load_align_dict(args.replace_unk)
@@ -59,8 +65,7 @@ def main():
         max_tokens=args.max_tokens,
         max_sentences=args.batch_size,
         max_positions=utils.resolve_max_positions(
-            task.max_positions(),
-            *[model.max_positions()]
+            task.max_positions(), *[model.max_positions()]
         ),
         ignore_invalid_inputs=args.skip_invalid_size_inputs_valid_test,
         required_batch_size_multiple=args.required_batch_size_multiple,
@@ -72,7 +77,7 @@ def main():
         itr,
         log_format=args.log_format,
         log_interval=args.log_interval,
-        default_log_format=('tqdm' if not args.no_progress_bar else 'none'),
+        default_log_format=("tqdm" if not args.no_progress_bar else "none"),
     )
 
     scorer = SequenceScorer(task.target_dictionary)
@@ -83,22 +88,23 @@ def main():
     for sample in progress:
         sample = utils.move_to_cuda(sample) if use_cuda else sample
         tgts.append(tgt_dict.string(sample["target"]))
-        if 'net_input' not in sample:
+        if "net_input" not in sample:
             continue
 
         hypos = scorer.generate([model], sample)
-        for i, sample_id in enumerate(sample['id'].tolist()):
+        for i, sample_id in enumerate(sample["id"].tolist()):
             ids.append(sample_id)
             hypo = hypos[i][0]
-            scores.append(hypo['score'] / math.log(2))
+            scores.append(hypo["score"] / math.log(2))
 
-    scores = [x for _,x in sorted(zip(ids,scores))]
+    scores = [x for _, x in sorted(zip(ids, scores))]
 
     with open(args.output, "w") as file:
-        for i,s in zip(ids, scores):
+        for i, s in zip(ids, scores):
             file.write(f"{s}\n")
-        
+
     print("done!")
+
 
 if __name__ == "__main__":
     main()

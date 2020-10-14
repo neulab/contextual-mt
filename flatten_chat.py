@@ -32,6 +32,5 @@ def main():
                 print(turn["source"])
 
 
-
 if __name__ == "__main__":
     main()
