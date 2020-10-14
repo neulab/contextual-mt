@@ -11,6 +11,6 @@ setuptools.setup(
     classifiers=[
         "Programming Language :: Python :: 3",
     ],
-    entry_points={"console_scripts": ["dialogue-evaluate = dialogue_mt.evaluate:main"]},
+    entry_points={"console_scripts": ["dialogue-train = dialogue_mt.train:cli_main", "dialogue-evaluate = dialogue_mt.evaluate:main", "contrastive-evaluate = dialogue_mt.contrastive:main"]},
     python_requires=">=3.6",
 )

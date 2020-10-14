@@ -44,7 +44,7 @@ python scripts/spm_train.py $DATA_DIR/train.json \
 You can train using fairseq's training tool. Just select the `dialogue_translation` task with the approriate context sizes
 
 ```bash
-fairseq-train $DATA_DIR \
+dialogue-train $DATA_DIR \
     --user-dir dialogue_mt \
     --task dialogue_translation --source-context-size $N --target-context-size $M \
     --bpe sentencepiece --sentencepiece-model $DATA_DIR/spm.model \
@@ -57,7 +57,7 @@ fairseq-train $DATA_DIR \
     --eval-bleu-remove-bpe sentencepiece \
     --eval-bleu-print-samples \
     --max-tokens  4096 --update-freq 8 --patience 10 --seed 42 \
-    --save-dir $CHECKPOINTS_DIR --no-epoch-checkpoints
+    --save-dir $CHECKPOINTS_DIR --no-epoch-checkpoints --datamap
 ```
 
 ## Inference and Evaluation
@@ -72,3 +72,13 @@ dialogue-evaluate $DATA_DIR \
     --comet-model wmt-large-da-estimator-1719 \
     --comet-path $COMET_DIR 
 ```
+
+Run contrastive evalution with
+```bash
+contrastive-evaluate $DATA_DIR --user-dir $REPO/dialogue_mt --dataset-impl mmap\
+    --source-context-size $N --target-context-size $M \
+    --task dialogue_translation --path $REPO/checkpoints/$EXPERIMENT_NAME/checkpoint_best.pt --max-tokens 4096 \
+    --bpe sentencepiece --sentencepiece-model $DATA_DIR/spm.model \
+    --prefix-size -1 --output $REPO/contra/$EXPERIMENT_NAME.txt --contra $CONTRA_DIR
+```
+which will produce the model's scores for each contrastive sample. 
