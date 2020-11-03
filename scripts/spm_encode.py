@@ -9,7 +9,6 @@ def main():
     parser.add_argument("--inputs", type=str, nargs="+", default=[None])
     parser.add_argument("--outputs", type=str, nargs="+", default=[None])
     parser.add_argument("--model", type=str, required=True)
-    parser.add_argument("--chunk-size", type=int, default=10000)
     args = parser.parse_args()
 
     assert len(args.inputs) == len(args.outputs)
