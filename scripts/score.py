@@ -46,6 +46,8 @@ def main():
     parser.add_argument("ref")
     parser.add_argument("--src", type=str, default=None)
     parser.add_argument("--docids", type=str, default=None)
+    parser.add_argument("--speaker", default=None)
+    parser.add_argument("--speakers-file", type=str, default=None)
     parser.add_argument("--context-size", type=int, default=0)
     parser.add_argument("--n-sentence", type=int, default=None)
     parser.add_argument(
@@ -64,6 +66,19 @@ def main():
         hyps = [line.strip() for line in hyp_f.readlines()]
     with open(args.ref) as ref_f:
         refs = [line.strip() for line in ref_f.readlines()]
+
+    if args.speaker is not None:
+        assert args.speakers_file is not None, \
+            "speaker file needed when evaluating performance for particular speaker"
+        
+        with open(args.speakers_file, "r") as speakers_f:
+            speakers = [line.strip() for line in speakers_f.readlines()]
+        
+        new_refs = []
+        for ref, spk in zip(refs, speakers):
+            if spk == args.speaker:
+                new_refs.append(ref)
+        refs = new_refs
 
     if args.context_size > 0:
         assert args.docids is not None, "docids file needed when context size > 0"

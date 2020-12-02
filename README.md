@@ -115,9 +115,11 @@ python scripts/score.py ${predictions_dir}/test.pred.tgt ${data_dir}/test.tgt \
 
 To run contrastive evaluation on ContraPro
 
+```bash
 python dialogue_mt/docmt_contrastive_eval.py \
     --source-lang en --target-lang de \
     --source-file $source_contr \
     --src-context-file $source_ctx_contr \
     --target-file $target_contr \
     --tgt-context-file $target_ctx_contr
+```
