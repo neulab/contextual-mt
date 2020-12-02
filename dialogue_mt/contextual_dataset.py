@@ -3,7 +3,9 @@ from fairseq.data import data_utils
 import torch
 import numpy as np
 
-from fairseq.data import data_utils, FairseqDataset
+from collections import defaultdict
+
+from fairseq.data import data_utils, FairseqDataset 
 
 
 def collate(samples, pad_id, eos_id, sort_by_src=False):
@@ -93,6 +95,16 @@ def collate(samples, pad_id, eos_id, sort_by_src=False):
     else:
         ntokens = src_lengths.sum().item()
 
+    if samples[0].get("src_sample_probs", None) is not None:
+        src_sample_probs = data_utils.collate_tokens(
+            [s["src_sample_probs"] for s in samples],
+            pad_idx=0.0,
+        )
+        if sort_by_src:
+            src_sample_probs.index_select(0, sort_order)
+
+        batch["net_input"]["src_sample_probs"] = src_sample_probs
+
     batch["ntokens"] = ntokens
     return batch
 
@@ -109,6 +121,8 @@ class ContextualDataset(FairseqDataset):
         contextual_ids,
         src_ctx_size=0,
         tgt_ctx_size=0,
+        pos_drop_probs=None,
+        src_pos_tags=None,
         break_tag=None,
         shuffle=True,
     ):
@@ -148,10 +162,18 @@ class ContextualDataset(FairseqDataset):
 
         self.src_sizes = np.array(full_src_sizes)
         self.tgt_sizes = np.array(full_tgt_sizes)
+        if pos_drop_probs is not None:
+            self.pos_drop_probs = defaultdict(lambda: 0.0)
+            for pos, p in pos_drop_probs.items():
+                self.pos_drop_probs[pos] = p
+        else:
+            self.pos_drop_probs = None
+        self.src_pos_tags = src_pos_tags
 
     def __getitem__(self, index):
-        src_item = self.src[index]
-        tgt_item = self.tgt[index]
+        # remove included eos token
+        src_item = self.src[index][:-1]
+        tgt_item = self.tgt[index][:-1]
         src_ctx_item = torch.tensor([]).long()
         tgt_ctx_item = torch.tensor([]).long()
         src_break_id = torch.tensor([self.src_dict.index(self.break_tag)])
@@ -165,7 +187,7 @@ class ContextualDataset(FairseqDataset):
                 if len(src_ctx_item) > 0 and self.break_tag is not None:
                     src_ctx_item = torch.cat([src_break_id, src_ctx_item])
 
-                src_ctx_item = torch.cat([self.src[index - i], src_ctx_item])
+                src_ctx_item = torch.cat([self.src[index - i][:-1], src_ctx_item])
         if self.tgt_ctx_size > 0:
             for i in range(1, self.tgt_ctx_size + 1):
                 if self.contextual_ids[index - i] != self.contextual_ids[index]:
@@ -173,7 +195,7 @@ class ContextualDataset(FairseqDataset):
                 if len(tgt_ctx_item) > 0 and self.break_tag is not None:
                     tgt_ctx_item = torch.cat([tgt_break_id, tgt_ctx_item])
 
-                tgt_ctx_item = torch.cat([self.tgt[index - i], tgt_ctx_item])
+                tgt_ctx_item = torch.cat([self.tgt[index - i][:-1], tgt_ctx_item])
 
         src_eos_id = torch.Tensor([self.src_dict.eos()]).long()
         tgt_eos_id = torch.Tensor([self.tgt_dict.eos()]).long()
@@ -188,6 +210,12 @@ class ContextualDataset(FairseqDataset):
             "tgt_context": tgt_ctx_item,
             "target": tgt_item,
         }
+        
+        if self.src_pos_tags is not None and self.pos_drop_probs is not None:
+            probs = []
+            for pos in self.src_pos_tags[index]:
+                probs.append(self.pos_drop_probs[pos])
+            sample["src_sample_probs"] = torch.tensor(probs)
 
         return sample
 

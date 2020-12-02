@@ -34,32 +34,34 @@ An example prerpocessing would be
 ```bash
 VOCAB_SIZE=32000
 
-for lang in src tgt; do
-    python scripts/spm_train.py 
+for lang in en fr; do
+    python $REPO/scripts/spm_train.py \
         ${data_dir}/train.${lang} \
-        --model-prefix ${data_dir}/spm.${lang} \
-        --vocab-file ${data_dir}/dict.${lang}.txt \
+        --model-prefix ${data_dir}/prep/spm.${lang} \
+        --vocab-file ${data_dir}/prep/dict.${lang}.txt \
         --vocab-size $VOCAB_SIZE
 done
 for split in train valid test; do
-    for lang in src tgt; do
-        python scripts/spm_encode.py \
-            --model ${data_dir}/spm.$lang.model \
+    for lang in en fr; do
+        python $REPO/scripts/spm_encode.py \
+            --model ${data_dir}/prep/spm.$lang.model \
                 < ${data_dir}/${split}.${lang} \
-                > ${data_dir}/${split}.sp.${lang}
+                > ${data_dir}/prep/${split}.sp.${lang}
     done
 done
 fairseq-preprocess \
     --source-lang src --target-lang tgt \
-    --trainpref ${data_dir}/train.sp \
-    --validpref ${data_dir}/valid.sp \
-    --testpref ${data_dir}/test.sp \
-    --srcdict ${data_dir}/dict.src.txt \
-    --tgtdict ${data_dir}/dict.tgt.txt \
-    --destdir ${bin_dir} 
+    --trainpref ${data_dir}/prep/train.sp \
+    --validpref ${data_dir}/pep/valid.sp \
+    --testpref ${data_dir}/prep/test.sp \
+    --srcdict ${data_dir}/prep/dict.src.txt \
+    --tgtdict ${data_dir}/prep/dict.tgt.txt \
+    --destdir ${data_dir}/bin
 ```
 
 ## Training
+
+### Document-level translation
 
 You can train using fairseq's training tool. Just select the `document_translation` task with the approriate context sizes
 
@@ -81,6 +83,8 @@ fairseq-train \
     --best-checkpoint-metric bleu --maximize-best-checkpoint-metric \
     --save-dir ${checkpoint_dir} --no-epoch-checkpoints
 ```
+
+### Dialogue Translation
 
 ## Inference and Evaluation
 
@@ -107,4 +111,13 @@ python scripts/score.py ${predictions_dir}/test.pred.tgt ${data_dir}/test.tgt \
     --comet-path $COMET_DIR
 ```
 
-## Contrastive eval
+## Contrastive evaluation
+
+To run contrastive evaluation on ContraPro
+
+python dialogue_mt/docmt_contrastive_eval.py \
+    --source-lang en --target-lang de \
+    --source-file $source_contr \
+    --src-context-file $source_ctx_contr \
+    --target-file $target_contr \
+    --tgt-context-file $target_ctx_contr

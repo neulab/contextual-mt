@@ -122,6 +122,7 @@ def main():
     parser.add_argument(
         "--path", required=True, metavar="FILE", help="path to model file"
     )
+    parser.add_argument("--checkpoint-file", default="checkpoint_best.pt")
     parser.add_argument(
         "--batch-size",
         type=int,
@@ -132,7 +133,7 @@ def main():
 
     # load pretrained model, set eval and send to cuda
     pretrained = hub_utils.from_pretrained(
-        args.path, checkpoint_file="checkpoint_best.pt"
+        args.path, checkpoint_file=args.checkpoint_file
     )
     models = pretrained["models"]
     for model in models:

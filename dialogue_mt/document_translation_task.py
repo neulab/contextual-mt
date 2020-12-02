@@ -35,6 +35,12 @@ class DocumentTranslationTask(TranslationTask):
             type=str,
             help="is set, separates context sentences by the break tag",
         )
+        parser.add_argument(
+            "--pos-drop-probs",
+            nargs="+",
+            type=str,
+            help="",
+        )
 
     def build_model(self, args):
         model = super().build_model(args)
@@ -97,6 +103,16 @@ class DocumentTranslationTask(TranslationTask):
         with open(prefix + "docids", "r") as f:
             doc_ids = [int(idx) for idx in f]
 
+        pos_tags = None
+        if split == "train" and os.path.exists(f"{prefix}pos.{src}"):
+            with open(f"{prefix}pos.{src}", "r") as f:
+                pos_tags = [line.strip().split(" ") for line in f]
+        pos_drop_probs = None
+        if self.args.pos_drop_probs is not None:
+            pos_drop_probs = {
+                p.split(":")[0]: float(p.split(":")[1]) for p in self.args.pos_drop_probs
+            }
+        
         self.datasets[split] = ContextualDataset(
             src_dataset,
             src_dataset.sizes,
@@ -107,6 +123,8 @@ class DocumentTranslationTask(TranslationTask):
             doc_ids,
             self.args.source_context_size,
             self.args.target_context_size,
+            src_pos_tags=pos_tags,
+            pos_drop_probs=pos_drop_probs,
             break_tag=self.args.break_tag,
             shuffle=True,
         )

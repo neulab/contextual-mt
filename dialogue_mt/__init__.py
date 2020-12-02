@@ -7,5 +7,5 @@ __all__ = [
     "ContextualTransformerModel",
     "ContextualDataset",
     "ContextualSequenceGenerator",
-    "DocumentTranslationTask",
+    "DocumentTranslationTask"
 ]

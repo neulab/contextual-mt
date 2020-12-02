@@ -42,12 +42,17 @@ class ContextualTransformerModel(TransformerModel):
                             help='if set, trains to predict target context tokens')
         parser.add_argument('--source-dropout', default=0.0, type=float,
                             help='if set to value>0, randomly drops source tokens')
+        parser.add_argument('--source-dropout-type', 
+                            choices=("sample", "predefined_sample", "whole", "suffix"), 
+                            default='sample',
+                            help='')
 
     @classmethod
     def build_encoder(cls, args, src_dict, embed_tokens):
         return ContextualTransformerEncoder(
             args, src_dict, embed_tokens,
-            source_dropout=getattr(args,"source_dropout", 0.0))
+            source_dropout_prob=getattr(args,"source_dropout", 0.0),
+            source_dropout_type=getattr(args, "source_dropout_type", "sample"))
 
     @classmethod
     def build_decoder(cls, args, tgt_dict, embed_tokens):
@@ -70,6 +75,7 @@ class ContextualTransformerModel(TransformerModel):
         src_ctx_lengths=None,
         tgt_ctx_tokens=None,
         tgt_ctx_lengths=None,
+        src_sample_probs=None,
         return_all_hiddens: bool = True,
         features_only: bool = False,
         alignment_layer: Optional[int] = None,
@@ -85,6 +91,7 @@ class ContextualTransformerModel(TransformerModel):
             src_lengths=src_lengths,
             src_ctx_tokens=src_ctx_tokens,
             src_ctx_lengths=src_ctx_lengths,
+            src_sample_probs=src_sample_probs,
             return_all_hiddens=return_all_hiddens,
         )
         decoder_out = self.decoder(
@@ -109,9 +116,15 @@ class ContextualTransformerModel(TransformerModel):
 
 
 class ContextualTransformerEncoder(TransformerEncoder):
-    def __init__(self, args, dictionary, embed_tokens, source_dropout=0):
+    def __init__(
+        self, 
+        args, dictionary, embed_tokens, 
+        source_dropout_type="sample",
+        source_dropout_prob=0.
+    ):
         super().__init__(args, dictionary, embed_tokens)
-        self.source_dropout = source_dropout
+        self.source_dropout_type = source_dropout_type
+        self.source_dropout_prob = source_dropout_prob
         # TODO: add this a variable token
         self.mask_id = dictionary.index("<mask>")
 
@@ -121,22 +134,46 @@ class ContextualTransformerEncoder(TransformerEncoder):
         src_lengths,
         src_ctx_tokens,
         src_ctx_lengths,
+        src_sample_probs=None,
         return_all_hiddens: bool = False,
     ):
+
+        # if source dropout enabled, randomly drop tokens from input
+        if self.training and self.source_dropout_type != None:
+            if self.source_dropout_type == "sample":
+                padding_mask = src_tokens.eq(self.padding_idx)
+                mask_token = torch.tensor(self.mask_id).to(src_tokens)
+                probs = torch.ones_like(src_tokens) * self.source_dropout_prob
+                mask = torch.logical_and(torch.bernoulli(probs), torch.logical_not(padding_mask))
+                src_tokens = torch.where(mask == 0, src_tokens, mask_token)
+            elif self.source_dropout_type == "predefined_sample":
+                assert src_sample_probs is not None, "need sample probabilities as a given"
+                padding_mask = src_tokens.eq(self.padding_idx)
+                mask_token = torch.tensor(self.mask_id).to(src_tokens)
+                mask = torch.logical_and(torch.bernoulli(src_sample_probs), torch.logical_not(padding_mask))
+                src_tokens = torch.where(mask == 0, src_tokens, mask_token)
+            elif self.source_dropout_type == "whole":
+                # make tensor with a single token (mask token)
+                mask_samples = torch.zeros_like(src_tokens).to(src_tokens)
+                mask_samples[mask_samples==0] = self.padding_idx
+                mask_samples[:, 0] = self.mask_id
+                # replace samples by this tensor based on bernoulli
+                probs = torch.ones((src_tokens.size(0),)) * self.source_dropout_prob
+                mask = torch.bernoulli(probs).to(src_tokens)
+                mask = torch.unsqueeze(mask, -1).repeat(1, src_tokens.size(1))
+                src_tokens = torch.where(mask==0, src_tokens, mask_samples)
+            elif self.source_dropout_type == "suffix":
+                # mask random sample
+                pass
+            else:
+                raise ValueError(f"unknown type of source dropout {self.source_dropout_type}")
+
         # Encode source tokens
         # as simple context encoding, we just concatenate context to input
         # TODO: add option for separate encoder
         # how to do it so that input can still attend to context 
         input_tokens = torch.cat([src_ctx_tokens, src_tokens], axis=1)
         padding_mask = input_tokens.eq(self.padding_idx)
-
-        # if source dropout enabled, randomly drop tokens from input
-        if self.training and self.source_dropout > 0:
-            mask_token = torch.tensor(self.mask_id).to(input_tokens)
-            probs = torch.ones_like(input_tokens) * self.source_dropout
-            probs.to(input_tokens)
-            mask = torch.logical_and(torch.bernoulli(probs), torch.logical_not(padding_mask))
-            input_tokens = torch.where(mask == 0, input_tokens, mask_token)
 
         x, encoder_embedding = self.forward_embedding(input_tokens)
 
@@ -319,7 +356,6 @@ class ContextualTransformerDecoder(TransformerDecoder):
                 self_attn_mask = self.buffered_future_mask(x)
             else:
                 self_attn_mask = None
-
             x, layer_attn, _ = layer(
                 x,
                 encoder_out.encoder_out if encoder_out is not None else None,
@@ -339,7 +375,8 @@ class ContextualTransformerDecoder(TransformerDecoder):
                 attn = attn[:alignment_heads]
 
             # average probabilities over heads
-            attn = attn.mean(dim=0)
+            if attn.dim() == 4:
+                attn = attn.mean(dim=0)
 
         # remove context
         if (not self.training) or not self.context_loss:
