@@ -3,12 +3,12 @@ from argparse import Namespace
 from fairseq import utils
 from fairseq.tasks import register_task
 from fairseq.tasks.translation import TranslationTask
-from fairseq.data import indexed_dataset, data_utils, encoders
+from fairseq.data import indexed_dataset, data_utils, encoders, MultiCorpusSampledDataset
 
 import os
 import json
 
-from dialogue_mt import ContextualDataset, ContextualSequenceGenerator
+from dialogue_mt import ContextualDataset, ContextualSequenceGenerator, HighlightedDataset
 
 
 @register_task("document_translation")
@@ -40,6 +40,28 @@ class DocumentTranslationTask(TranslationTask):
             nargs="+",
             type=str,
             help="",
+        )
+        parser.add_argument(
+            "--regularize-heads",
+            default=None,
+            type=int,
+            help="if set, regularize the i-th attention head using highlighted data"
+        )
+        parser.add_argument(
+            "--highlight-sample",
+            default=0.5,
+            type=float,
+            help="probability to sample highlighted data during training",
+        )
+        parser.add_argument(
+            "--highlight-on-tag",
+            default="<hon>",
+            type=str
+        )
+        parser.add_argument(
+            "--highlight-off-tag",
+            default="<hoff>",
+            type=str
         )
 
     def build_model(self, args):
@@ -112,19 +134,72 @@ class DocumentTranslationTask(TranslationTask):
             pos_drop_probs = {
                 p.split(":")[0]: float(p.split(":")[1]) for p in self.args.pos_drop_probs
             }
-        
-        self.datasets[split] = ContextualDataset(
-            src_dataset,
-            src_dataset.sizes,
-            self.src_dict,
-            tgt_dataset,
-            tgt_dataset.sizes,
-            self.tgt_dict,
-            doc_ids,
-            self.args.source_context_size,
-            self.args.target_context_size,
-            src_pos_tags=pos_tags,
-            pos_drop_probs=pos_drop_probs,
-            break_tag=self.args.break_tag,
-            shuffle=True,
-        )
+
+        main_data = ContextualDataset(
+                src_dataset,
+                src_dataset.sizes,
+                self.src_dict,
+                tgt_dataset,
+                tgt_dataset.sizes,
+                self.tgt_dict,
+                doc_ids,
+                self.args.source_context_size,
+                self.args.target_context_size,
+                src_pos_tags=pos_tags,
+                pos_drop_probs=pos_drop_probs,
+                break_tag=self.args.break_tag,
+                shuffle=True,
+            )
+
+        if (self.args.regularize_heads is not None) and (split == "train"):
+            # Load highlighted data
+            if split_exists('highlighted', src, tgt, src, data_path):
+                prefix = os.path.join(data_path, "{}.{}-{}.".format('highlighted', src, tgt))
+            elif split_exists('highlighted', tgt, src, src, data_path):
+                prefix = os.path.join(data_path, "{}.{}-{}.".format('highlighted', tgt, src))
+            else:
+                raise FileNotFoundError(
+                    "Dataset not found: {} ({})".format('highlighted', data_path)
+                )
+
+            h_src_dataset = data_utils.load_indexed_dataset(
+                prefix + src, self.src_dict, self.args.dataset_impl
+            )
+            h_tgt_dataset = data_utils.load_indexed_dataset(
+                prefix + tgt, self.tgt_dict, self.args.dataset_impl
+            )
+            h_src_ctx_dataset = data_utils.load_indexed_dataset(
+                prefix + 'ctx.' + src, self.src_dict, self.args.dataset_impl
+            )
+            h_tgt_ctx_dataset = data_utils.load_indexed_dataset(
+                prefix + 'ctx.' + tgt, self.tgt_dict, self.args.dataset_impl
+            )
+
+            highlighted_data = HighlightedDataset(
+                h_src_dataset,
+                h_src_dataset.sizes,
+                self.src_dict,
+                h_tgt_dataset,
+                h_tgt_dataset.sizes,
+                self.tgt_dict,
+                h_src_ctx_dataset,
+                h_src_ctx_dataset.sizes,
+                h_tgt_ctx_dataset,
+                h_tgt_ctx_dataset.sizes,
+                break_tag=self.args.break_tag,
+                hon_tag=self.args.highlight_on_tag,
+                hoff_tag=self.args.highlight_off_tag,
+                shuffle=True,
+            )
+
+            def sampler(x, p=self.args.highlight_sample):
+                if random.random() > p:
+                    return x[1]
+                else:
+                    return x[0]
+
+            self.datasets[split] = MultiCorpusSampledDataset(OrderedDict({"highlighted": highlighted_data, "main": main_data}), sampler)
+
+            
+        else:
+            self.datasets[split] = main_data
