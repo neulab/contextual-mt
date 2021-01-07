@@ -550,5 +550,5 @@ def contextual_transformer_iwslt_architecture(args):
 
 
 @register_model_architecture("contextual_transformer", "contextual_transformer_big")
-def contextual_transformer_iwslt_architecture(args):
+def contextual_transformer_big_architecture(args):
     transformer_vaswani_wmt_en_de_big(args)

@@ -1,5 +1,6 @@
 from .contextual_transformer import ContextualTransformerModel
 from .contextual_dataset import ContextualDataset
+from .highlighted_dataset import HighlightedDataset
 from .contextual_sequence_generator import ContextualSequenceGenerator
 from .attention_regularization_loss import AttentionLoss
 from .highlighted_dataset import HighlightedDataset

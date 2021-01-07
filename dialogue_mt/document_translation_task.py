@@ -123,7 +123,7 @@ class DocumentTranslationTask(TranslationTask):
             prefix + tgt, self.tgt_dict, self.args.dataset_impl
         )
         with open(prefix + "docids", "r") as f:
-            doc_ids = [int(idx) for idx in f]
+            doc_ids = [idx for idx in f] # allow string
 
         pos_tags = None
         if split == "train" and os.path.exists(f"{prefix}pos.{src}"):
