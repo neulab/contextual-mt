@@ -29,7 +29,7 @@ def main():
     else:
         for chat in chat_data.values():
             for turn in chat:
-                print(turn["source"])
+                print(turn["context_target"].strip())
 
 
 if __name__ == "__main__":

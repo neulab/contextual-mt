@@ -16,6 +16,7 @@ setuptools.setup(
             "dialogue-train = dialogue_mt.train:cli_main",
             "dialogue-evaluate = dialogue_mt.evaluate:main",
             "contrastive-evaluate = dialogue_mt.contrastive:main",
+            "attention-train = dialogue_mt.attention_train:cli_main",
         ]
     },
     python_requires=">=3.6",

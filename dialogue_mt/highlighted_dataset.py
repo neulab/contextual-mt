@@ -88,7 +88,7 @@ def collate(samples, pad_id, eos_id, sort_by_src=False):
         "src_ctx_highlights": src_ctx_highlights,
         "tgt_ctx_highlights": tgt_ctx_highlights,
         "source_highlights": source_highlights,
-        "target_highlights": target_highlights
+        "target_highlights": target_highlights,
     }
 
     if samples[0].get("target", None) is not None:
