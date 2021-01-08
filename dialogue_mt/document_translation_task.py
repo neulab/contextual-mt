@@ -4,6 +4,8 @@ from fairseq import utils
 from fairseq.tasks import register_task
 from fairseq.tasks.translation import TranslationTask
 from fairseq.data import indexed_dataset, data_utils, encoders, MultiCorpusSampledDataset
+from collections import OrderedDict
+import random
 
 import os
 import json
@@ -61,6 +63,16 @@ class DocumentTranslationTask(TranslationTask):
         parser.add_argument(
             "--highlight-off-tag",
             default="<hoff>",
+            type=str
+        )
+        parser.add_argument(
+            "--src-word-on-tag",
+            default="<p>",
+            type=str
+        )
+        parser.add_argument(
+            "--src-word-off-tag",
+            default="</p>",
             type=str
         )
 
@@ -168,11 +180,20 @@ class DocumentTranslationTask(TranslationTask):
             h_tgt_dataset = data_utils.load_indexed_dataset(
                 prefix + tgt, self.tgt_dict, self.args.dataset_impl
             )
+
+            if split_exists('highlighted.context', src, tgt, src, data_path):
+                prefix = os.path.join(data_path, "{}.{}-{}.".format('highlighted.context', src, tgt))
+            elif split_exists('highlighted.context', tgt, src, src, data_path):
+                prefix = os.path.join(data_path, "{}.{}-{}.".format('highlighted.context', tgt, src))
+            else:
+                raise FileNotFoundError(
+                    "Dataset not found: {} ({})".format('highlighted.context', data_path)
+                )
             h_src_ctx_dataset = data_utils.load_indexed_dataset(
-                prefix + 'ctx.' + src, self.src_dict, self.args.dataset_impl
+                prefix + src, self.src_dict, self.args.dataset_impl
             )
             h_tgt_ctx_dataset = data_utils.load_indexed_dataset(
-                prefix + 'ctx.' + tgt, self.tgt_dict, self.args.dataset_impl
+                prefix + tgt, self.tgt_dict, self.args.dataset_impl
             )
 
             highlighted_data = HighlightedDataset(
@@ -189,6 +210,8 @@ class DocumentTranslationTask(TranslationTask):
                 break_tag=self.args.break_tag,
                 hon_tag=self.args.highlight_on_tag,
                 hoff_tag=self.args.highlight_off_tag,
+                p_tag=self.args.src_word_on_tag,
+                p2_tag=self.args.src_word_off_tag,
                 shuffle=True,
             )
 
@@ -203,3 +226,77 @@ class DocumentTranslationTask(TranslationTask):
             
         else:
             self.datasets[split] = main_data
+
+    def load_highlighted(self, epoch=1, combine=False, **kwargs):
+        """Load a given dataset split.
+        Args:
+            split (str): name of the split (e.g., train, valid, test)
+        """
+
+        def split_exists(split, src, tgt, lang, data_path):
+            filename = os.path.join(
+                data_path, "{}.{}-{}.{}".format(split, src, tgt, lang)
+            )
+            return indexed_dataset.dataset_exists(filename, impl=self.args.dataset_impl)
+
+        paths = utils.split_paths(self.args.data)
+        assert len(paths) > 0
+        paths = paths[:1]
+        data_path = paths[(epoch - 1) % len(paths)]
+
+        # infer langcode
+        src, tgt = self.args.source_lang, self.args.target_lang
+
+        # Load highlighted data
+        if split_exists('highlighted', src, tgt, src, data_path):
+            prefix = os.path.join(data_path, "{}.{}-{}.".format('highlighted', src, tgt))
+        elif split_exists('highlighted', tgt, src, src, data_path):
+            prefix = os.path.join(data_path, "{}.{}-{}.".format('highlighted', tgt, src))
+        else:
+            raise FileNotFoundError(
+                "Dataset not found: {} ({})".format('highlighted', data_path)
+            )
+
+        h_src_dataset = data_utils.load_indexed_dataset(
+            prefix + src, self.src_dict, self.args.dataset_impl
+        )
+        h_tgt_dataset = data_utils.load_indexed_dataset(
+            prefix + tgt, self.tgt_dict, self.args.dataset_impl
+        )
+
+        if split_exists('highlighted.context', src, tgt, src, data_path):
+            prefix = os.path.join(data_path, "{}.{}-{}.".format('highlighted.context', src, tgt))
+        elif split_exists('highlighted.context', tgt, src, src, data_path):
+            prefix = os.path.join(data_path, "{}.{}-{}.".format('highlighted.context', tgt, src))
+        else:
+            raise FileNotFoundError(
+                "Dataset not found: {} ({})".format('highlighted.context', data_path)
+            )
+        h_src_ctx_dataset = data_utils.load_indexed_dataset(
+            prefix + src, self.src_dict, self.args.dataset_impl
+        )
+        h_tgt_ctx_dataset = data_utils.load_indexed_dataset(
+            prefix + tgt, self.tgt_dict, self.args.dataset_impl
+        )
+
+        self.datasets["highlighted"] = HighlightedDataset(
+            h_src_dataset,
+            h_src_dataset.sizes,
+            self.src_dict,
+            h_tgt_dataset,
+            h_tgt_dataset.sizes,
+            self.tgt_dict,
+            h_src_ctx_dataset,
+            h_src_ctx_dataset.sizes,
+            h_tgt_ctx_dataset,
+            h_tgt_ctx_dataset.sizes,
+            break_tag=self.args.break_tag,
+            hon_tag=self.args.highlight_on_tag,
+            hoff_tag=self.args.highlight_off_tag,
+            p_tag=self.args.src_word_on_tag,
+            p2_tag=self.args.src_word_off_tag,
+            shuffle=True,
+        )
+
+
+

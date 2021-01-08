@@ -82,11 +82,25 @@ def collate(samples, pad_id, eos_id, sort_by_src=False):
         0,
     )
 
+    src_words = data_utils.collate_tokens(
+        [s["src_words_idx"] for s in samples],
+        0,
+        0,
+    )
+
+    tgt_words = data_utils.collate_tokens(
+        [s["tgt_words_idx"] for s in samples],
+        0,
+        0,
+    )
+
     batch["highlights"] = {
         "src_ctx_highlights": src_ctx_highlights,
         "tgt_ctx_highlights": tgt_ctx_highlights,
         "source_highlights": source_highlights,
         "target_highlights": target_highlights,
+        "src_words": src_words,
+        "tgt_words": tgt_words
     }
 
     if samples[0].get("target", None) is not None:
@@ -127,6 +141,57 @@ def collate(samples, pad_id, eos_id, sort_by_src=False):
     batch["ntokens"] = ntokens
     return batch
 
+def extract_highlights(data, hon_id, hoff_id, p_id=None, p_id2=None):
+
+    tokens_data = []
+    highlighted_data = []
+    source_words_idx = []
+
+    for tokens in data:
+        highlighted = []
+        high = 0
+        source_word = False
+        to_delete = []
+        words_idx = []
+        for i,token in enumerate(tokens):
+            if token == hon_id:
+                high = 1
+                to_delete.append(i)
+            elif token == hoff_id:
+                high = 0
+                to_delete.append(i)
+            elif token == p_id:
+                source_word = True
+                to_delete.append(i)
+            elif token == p_id2:
+                source_word = False
+                to_delete.append(i)
+            else:
+                highlighted.append(high)
+                if source_word:
+                    words_idx.append(1)
+                else:
+                    words_idx.append(0)
+
+
+        for i in to_delete[::-1]:
+            tokens = torch.cat([tokens[:i], tokens[i+1:]])
+        # For eos tag
+        highlighted.append(0)
+        words_idx.append(0)
+
+        highlighted = torch.Tensor(highlighted)
+        words_idx = torch.Tensor(words_idx)
+
+        tokens_data.append(tokens)
+        highlighted_data.append(highlighted)
+
+        if p_id is not None:
+            source_words_idx.append(words_idx)
+    
+    if p_id is not None:
+        return tokens_data, highlighted_data, source_words_idx
+    return tokens_data, highlighted_data
 
 class HighlightedDataset(FairseqDataset):
     def __init__(
@@ -144,6 +209,8 @@ class HighlightedDataset(FairseqDataset):
         break_tag=None,
         hon_tag=None,
         hoff_tag=None,
+        p_tag=None,
+        p2_tag=None,
         shuffle=True,
     ):
         assert src_dict.pad() == tgt_dict.pad()
@@ -166,10 +233,15 @@ class HighlightedDataset(FairseqDataset):
         tgt_hon_id = self.tgt_dict.index(self.hon_tag)
         tgt_hoff_id = self.tgt_dict.index(self.hoff_tag)
 
-        self.src, self.h_src = extract_highlights(src, src_hon_id, src_hoff_id)
-        self.tgt, self.h_tgt = extract_highlights(tgt, tgt_hon_id, tgt_hoff_id)
+        self.src, self.h_src, self.src_words_idx = extract_highlights(src, src_hon_id, src_hoff_id, self.src_dict.index(p_tag), self.src_dict.index(p2_tag))
+        self.tgt, self.h_tgt, self.tgt_words_idx = extract_highlights(tgt, tgt_hon_id, tgt_hoff_id, self.tgt_dict.index(p_tag), self.tgt_dict.index(p2_tag))
         self.c_src, self.h_c_src = extract_highlights(ctx_src, src_hon_id, src_hoff_id)
         self.c_tgt, self.h_c_tgt = extract_highlights(ctx_tgt, tgt_hon_id, tgt_hoff_id)
+
+        # self.src = src
+        # self.tgt = tgt
+        # self.c_src = ctx_src
+        # self.c_tgt = ctx_tgt
 
         # recompute sizes  based on context size and special tokens
         full_src_sizes, full_tgt_sizes = [], []
@@ -184,28 +256,6 @@ class HighlightedDataset(FairseqDataset):
         self.src_sizes = np.array(full_src_sizes)
         self.tgt_sizes = np.array(full_tgt_sizes)
 
-    def extract_highlights(tokens, hon_id, hoff_id):
-
-        highlighted = []
-        high = 0
-        to_delete = []
-
-        for i,token in enumerate(tokens):
-            if token == hon_id:
-                high = 1
-                to_delete.append(i)
-            elif token == hoff_id:
-                high = 0
-                to_delete.append(i)
-            else:
-                highlighted.append(high)
-
-        for i in to_delete[::-1]:
-            token = torch.cat([token[:i], token[i+1:]])
-
-        return token, torch.Tensor(highlighted)
-
-
     def __getitem__(self, index):
         src_item = self.src[index]
         tgt_item = self.tgt[index]
@@ -215,7 +265,8 @@ class HighlightedDataset(FairseqDataset):
         h_tgt_item = self.h_tgt[index]
         h_src_ctx_item = self.h_c_src[index]
         h_tgt_ctx_item = self.h_c_tgt[index]
-
+        src_words = self.src_words_idx[index]
+        tgt_words = self.tgt_words_idx[index]
 
         src_eos_id = torch.Tensor([self.src_dict.eos()]).long()
         tgt_eos_id = torch.Tensor([self.tgt_dict.eos()]).long()
@@ -223,6 +274,7 @@ class HighlightedDataset(FairseqDataset):
         tgt_ctx_item = torch.cat([tgt_ctx_item, tgt_eos_id])
         src_item = torch.cat([src_item, src_eos_id])
         tgt_item = torch.cat([tgt_item, tgt_eos_id])
+        
         sample = {
             "id": index,
             "src_context": src_ctx_item,
@@ -233,6 +285,8 @@ class HighlightedDataset(FairseqDataset):
             "h_source": h_src_item,
             "h_tgt_context": h_tgt_ctx_item,
             "h_target": h_tgt_item,
+            "src_words_idx": src_words,
+            "tgt_words_idx": tgt_words,
         }
         
         return sample
@@ -319,3 +373,58 @@ class HighlightedDataset(FairseqDataset):
                 & (self.tgt_sizes[indices] <= max_tgt_size)
             ]
         return indices, ignored.tolist()
+
+if __name__ == "__main__":
+    import os
+    from fairseq.data import indexed_dataset, data_utils
+    data_path = '/projects/tir4/users/kayoy/attention-regularization/dialogue-mt/test_data/bin'
+    src = 'en'
+    tgt = 'fr'
+    # Load highlighted data
+    if split_exists('highlighted', src, tgt, src, data_path):
+        prefix = os.path.join(data_path, "{}.{}-{}.".format('highlighted', src, tgt))
+    elif split_exists('highlighted', tgt, src, src, data_path):
+        prefix = os.path.join(data_path, "{}.{}-{}.".format('highlighted', tgt, src))
+    else:
+        raise FileNotFoundError(
+            "Dataset not found: {} ({})".format('highlighted', data_path)
+        )
+
+    h_src_dataset = data_utils.load_indexed_dataset(
+        prefix + src, src_dict, "mmap"
+    )
+    h_tgt_dataset = data_utils.load_indexed_dataset(
+        prefix + tgt, tgt_dict, "mmap"
+    )
+
+    if split_exists('highlighted.context', src, tgt, src, data_path):
+        prefix = os.path.join(data_path, "{}.{}-{}.".format('highlighted.context', src, tgt))
+    elif split_exists('highlighted.context', tgt, src, src, data_path):
+        prefix = os.path.join(data_path, "{}.{}-{}.".format('highlighted.context', tgt, src))
+    else:
+        raise FileNotFoundError(
+            "Dataset not found: {} ({})".format('highlighted.context', data_path)
+        )
+    h_src_ctx_dataset = data_utils.load_indexed_dataset(
+        prefix + src, src_dict, "mmap"
+    )
+    h_tgt_ctx_dataset = data_utils.load_indexed_dataset(
+        prefix + tgt, tgt_dict, "mmap"
+    )
+
+    highlighted_data = HighlightedDataset(
+        h_src_dataset,
+        h_src_dataset.sizes,
+        src_dict,
+        h_tgt_dataset,
+        h_tgt_dataset.sizes,
+        tgt_dict,
+        h_src_ctx_dataset,
+        h_src_ctx_dataset.sizes,
+        h_tgt_ctx_dataset,
+        h_tgt_ctx_dataset.sizes,
+        break_tag="<brk>",
+        hon_tag="<hon>",
+        hoff_tag="<hoff>",
+        shuffle=True,
+    )

@@ -374,15 +374,19 @@ class ContextualTransformerDecoder(TransformerDecoder):
             )
             inner_states.append(x)
             if layer_attn is not None and idx == alignment_layer:
-                attn = layer_attn.float().to(x)
+                self_attn = layer_attn[0].float().to(x)
+                cross_attn = layer_attn[1].float().to(x)
 
-        if attn is not None:
+        if self_attn is not None:
             if alignment_heads is not None:
-                attn = attn[:alignment_heads]
+                self_attn = self_attn[:alignment_heads]
+                cross_attn = cross_attn[:alignment_heads]
 
             # average probabilities over heads
-            if attn.dim() == 4:
-                attn = attn.mean(dim=0)
+            if self_attn.dim() == 4:
+                self_attn = self_attn.mean(dim=0)
+            if cross_attn.dim() == 4:
+                cross_attn = cross_attn.mean(dim=0)
 
         # remove context
         if (not self.training) or not self.context_loss:
@@ -397,10 +401,17 @@ class ContextualTransformerDecoder(TransformerDecoder):
         if self.project_out_dim is not None:
             x = self.project_out_dim(x)
 
-        return x, {"attn": [attn], "inner_states": inner_states}
+        return x, {"attn": [self_attn, cross_attn], "inner_states": inner_states}
 
 
-class TransformerDecoderLayerReturnSelfAttention(TransformerDecoderLayerReturnSelfAttention):
+class TransformerDecoderLayerReturnSelfAttention(TransformerDecoderLayer):
+    def __init__(
+        self, args, no_encoder_attn=False, add_bias_kv=False, add_zero_attn=False
+    ):
+        super().__init__(args, no_encoder_attn, add_bias_kv, add_zero_attn)
+
+    def residual_connection(self, x, residual):
+        return residual + x
 
     def forward(
         self,
@@ -468,13 +479,13 @@ class TransformerDecoderLayerReturnSelfAttention(TransformerDecoderLayerReturnSe
         else:
             y = x
 
-        x, attn = self.self_attn(
+        x, self_attn = self.self_attn(
             query=x,
             key=y,
             value=y,
             key_padding_mask=self_attn_padding_mask,
             incremental_state=incremental_state,
-            need_weights=False,
+            need_weights=True,
             attn_mask=self_attn_mask,
         )
         x = self.dropout_module(x)
@@ -497,7 +508,7 @@ class TransformerDecoderLayerReturnSelfAttention(TransformerDecoderLayerReturnSe
                 assert incremental_state is not None
                 self.encoder_attn._set_input_buffer(incremental_state, saved_state)
 
-            x, _ = self.encoder_attn(
+            x, cross_attn = self.encoder_attn(
                 query=x,
                 key=encoder_out,
                 value=encoder_out,
@@ -534,8 +545,10 @@ class TransformerDecoderLayerReturnSelfAttention(TransformerDecoderLayerReturnSe
                 ]
             else:
                 self_attn_state = [saved_state["prev_key"], saved_state["prev_value"]]
+            #print("onnx size ", attn.size(), self_attn_state.size())
             return x, attn, self_attn_state
-        return x, attn, None
+        #print("attentions size ", self_attn.size(), cross_attn.size())
+        return x, [cross_attn, self_attn], None
 
 
 

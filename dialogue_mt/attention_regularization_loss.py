@@ -7,6 +7,8 @@ import math
 from dataclasses import dataclass, field
 
 import torch
+import torch.nn as nn
+
 from fairseq import metrics, utils
 from fairseq.criterions import FairseqCriterion, register_criterion
 from fairseq.dataclass import FairseqDataclass
@@ -67,6 +69,7 @@ class AttentionLoss(FairseqCriterion):
         self.eps = label_smoothing
         self.ignore_prefix_size = ignore_prefix_size
         self.report_accuracy = report_accuracy
+        self.regularize_heads = task.args.regularize_heads
 
     def forward(self, model, sample, reduce=True):
         """Compute the loss for the given sample.
@@ -76,24 +79,64 @@ class AttentionLoss(FairseqCriterion):
         2) the sample size, which is used as the denominator for the gradient
         3) logging outputs to display while training
         """
-        net_output, output_features = model(**sample["net_input"])
+        net_output = model(**sample["net_input"])
+        output_features = net_output[1]
         loss, nll_loss = self.compute_loss(model, net_output, sample, reduce=reduce)
-        attn_loss = None
+        cross_attn_loss = None
         if "highlights" in sample:
-            attention = output_features["attn"][0] # TODO: check dimensions, what this actually corresponds to
-            print("Attention size: ", attention.size())
-            highlights = torch.cat([sample["highlights"]["src_ctx_highlights"],
-                                    sample["highlights"]["source_highlights"],
-                                    sample["highlights"]["tgt_ctx_highlights"],
-                                    sample["highlights"]["target_highlights"]])
 
+            cross_attn = output_features["attn"][0] # batchsize x tgt_seq_len x src_seq_len
+            self_attn = output_features["attn"][1] # batchsize x tgt_seq_len x tgt_seq_len
+            
+            src_highlights = torch.cat([sample["highlights"]["src_ctx_highlights"],
+                                    sample["highlights"]["source_highlights"]], axis=1)
+            tgt_highlights = torch.cat([sample["highlights"]["tgt_ctx_highlights"],
+                                    sample["highlights"]["target_highlights"]], axis=1)
+
+            #print("attention sizes ", cross_attn.size(), self_attn.size())
+            #print("highlight sizes ", src_highlights.size(), tgt_highlights.size())
             # normalize the highlights
-            updated_tags = highlights + 1e-9
+            updated_tags = src_highlights + 1e-9
             normalizing_const = torch.sum(updated_tags, dim=1)
-            normalized_tags = torch.einsum('ij,i->ij', updated_tags, 1.0/normalizing_const)
+            src_normalized_tags = torch.einsum('ij,i->ij', updated_tags, 1.0/normalizing_const)
+            
+            updated_tags = tgt_highlights + 1e-9
+            normalizing_const = torch.sum(updated_tags, dim=1)
+            tgt_normalized_tags = torch.einsum('ij,i->ij', updated_tags, 1.0/normalizing_const)
 
             kld_loss = nn.KLDivLoss(reduction='batchmean') 
-            attn_loss = kld_loss(last_layer_CLS_attention_avg_log, normalized_tags)
+            cross_attn_loss = 0
+            self_attn_loss = 0
+            cross_attn_mean = []
+            self_attn_mean = []
+
+            offset = sample["highlights"]["tgt_ctx_highlights"].size(1)
+            #print("Tgt words ", offset, sample["highlights"]["tgt_words"].size())
+            # for src_normalized_tag, tgt_normalized_tag, tgt_word, src_highlight, tgt_highlight in zip(src_normalized_tags, tgt_normalized_tags, sample["highlights"]["tgt_words"], src_highlights, tgt_highlights):
+            #     for i, value in enumerate(tgt_word):
+            #         if value.item() == 1:
+            #             cross_attn_selected = cross_attn[:,i + offset,:]
+            #             self_attn_selected = self_attn[:,i + offset,:]
+            #             cross_attn_loss += kld_loss(cross_attn_selected, src_normalized_tag)
+            #             self_attn_loss += kld_loss(self_attn_selected, tgt_normalized_tag)
+            #             cross_attn_mean.append(torch.sum(torch.mul(cross_attn_selected, src_highlight)) / torch.sum(src_highlight))
+            #             self_attn_mean.append(torch.sum(torch.mul(self_attn_selected, tgt_highlight)) / torch.sum(tgt_highlight))
+            #print("words ", sample["highlights"]["tgt_ctx_highlights"].size(), sample["highlights"]["tgt_words"].size())
+            tgt_words = torch.cat([torch.zeros_like(sample["highlights"]["tgt_ctx_highlights"]), sample["highlights"]["tgt_words"]], axis=1)
+            #print("tgt words ", tgt_words.size())
+            cross_attn_gold = cross_attn.detach()
+            self_attn_gold = self_attn.detach()
+            for batch_id, words in enumerate(tgt_words):
+                for i, word in enumerate(words):
+                    if word.item() == 1:
+                        cross_attn_gold[batch_id, i] = src_normalized_tags[batch_id]
+                        self_attn_gold[batch_id, i] = tgt_normalized_tags[batch_id]
+                        cross_attn_mean.append(torch.sum(torch.mul(cross_attn[batch_id, i], src_normalized_tags[batch_id])) / torch.sum(src_normalized_tags[batch_id]))
+                        self_attn_mean.append(torch.sum(torch.mul(self_attn[batch_id, i], tgt_normalized_tags[batch_id])) / torch.sum(tgt_normalized_tags[batch_id]))
+            cross_attn_loss = kld_loss(cross_attn, cross_attn_gold)
+            self_attn_loss = kld_loss(self_attn, self_attn_gold)
+            cross_attn_mean = sum(cross_attn_mean) / len(cross_attn_mean)
+            self_attn_mean = sum(self_attn_mean) / len(self_attn_mean)
 
         sample_size = (
             sample["target"].size(0) if self.sentence_avg else sample["ntokens"]
@@ -105,15 +148,18 @@ class AttentionLoss(FairseqCriterion):
             "nsentences": sample["target"].size(0),
             "sample_size": sample_size,
         }
-        
+
+        if cross_attn_loss is not None:
+            logging_output["cross_attn_mean"] = cross_attn_mean.data
+            logging_output["self_attn_mean"] = self_attn_mean.data
+            loss += cross_attn_loss + self_attn_loss
+
         if self.report_accuracy:
             n_correct, total = self.compute_accuracy(model, net_output, sample)
             logging_output["n_correct"] = utils.item(n_correct.data)
             logging_output["total"] = utils.item(total.data)
 
-        if attn_loss is not None:
-            logging_output["attn_loss"] = attn_loss.data
-            loss += attn_loss
+        
         return loss, sample_size, logging_output
 
     def get_lprobs_and_target(self, model, net_output, sample):
@@ -153,8 +199,11 @@ class AttentionLoss(FairseqCriterion):
         """Aggregate logging outputs from data parallel training."""
         loss_sum = sum(log.get("loss", 0) for log in logging_outputs)
         nll_loss_sum = sum(log.get("nll_loss", 0) for log in logging_outputs)
+        cross_attn_sum = sum(log.get("cross_attn_mean", 0) for log in logging_outputs)
+        self_attn_sum = sum(log.get("self_attn_mean", 0) for log in logging_outputs)
         ntokens = sum(log.get("ntokens", 0) for log in logging_outputs)
         sample_size = sum(log.get("sample_size", 0) for log in logging_outputs)
+        num_attn = sum([1 for log in logging_outputs if "cross_attn_mean" in log])
 
         metrics.log_scalar(
             "loss", loss_sum / sample_size / math.log(2), sample_size, round=3
@@ -162,6 +211,14 @@ class AttentionLoss(FairseqCriterion):
         metrics.log_scalar(
             "nll_loss", nll_loss_sum / ntokens / math.log(2), ntokens, round=3
         )
+        if num_attn > 0:
+            metrics.log_scalar(
+                "cross_attn", cross_attn_sum / num_attn / math.log(2), num_attn, round=3
+            )
+            metrics.log_scalar(
+                "self_attn", self_attn_sum / num_attn / math.log(2), num_attn, round=3
+            )
+        
         metrics.log_derived(
             "ppl", lambda meters: utils.get_perplexity(meters["nll_loss"].avg)
         )
@@ -247,4 +304,6 @@ if __name__ == "__main__":
         sample = utils.move_to_cuda(sample) if use_cuda else sample
         if "net_input" not in sample:
             continue
+
+        criterion(model, sample)
         
