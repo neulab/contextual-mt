@@ -181,7 +181,7 @@ class ContextualTransformerEncoder(TransformerEncoder):
         # B x T x C -> T x B x C
         x = x.transpose(0, 1)
 
-        x_encoder_states = [] if return_all_hiddens else None
+        x_encoder_states = [] 
         for layer in self.layers:
             x = layer(x, padding_mask)
             if return_all_hiddens:
@@ -191,14 +191,14 @@ class ContextualTransformerEncoder(TransformerEncoder):
         if self.layer_norm is not None:
             x = self.layer_norm(x)
 
-        return EncoderOut(
-            encoder_out=x,  # T x B x C
-            encoder_padding_mask=padding_mask,  # B x T
-            encoder_embedding=encoder_embedding,  # B x T x C
-            encoder_states=x_encoder_states,  # List[T x B x C]
-            src_tokens=None,
-            src_lengths=None,
-        )
+        return {
+            "encoder_out": [x],  # T x B x C
+            "encoder_padding_mask": [padding_mask],  # B x T
+            "encoder_embedding": [encoder_embedding],  # B x T x C
+            "encoder_states": x_encoder_states,  # List[T x B x C]
+            "src_tokens": torch.empty(0),  # B x T
+            "src_lengths": torch.empty(0),  # B x 1
+        }
 
 
 class ContextualTransformerDecoder(TransformerDecoder):
@@ -215,7 +215,7 @@ class ContextualTransformerDecoder(TransformerDecoder):
         self,
         prev_output_tokens,
         context_tokens,
-        encoder_out: Optional[EncoderOut] = None,
+        encoder_out: Optional[Dict[str, List[Tensor]]] = None,
         incremental_state: Optional[Dict[str, Dict[str, Optional[Tensor]]]] = None,
         features_only: bool = False,
         full_context_alignment: bool = False,
@@ -258,7 +258,7 @@ class ContextualTransformerDecoder(TransformerDecoder):
         self,
         prev_output_tokens,
         context_tokens,
-        encoder_out: Optional[EncoderOut] = None,
+        encoder_out: Optional[Dict[str, List[Tensor]]],
         incremental_state: Optional[Dict[str, Dict[str, Optional[Tensor]]]] = None,
         full_context_alignment: bool = False,
         alignment_layer: Optional[int] = None,
@@ -284,7 +284,7 @@ class ContextualTransformerDecoder(TransformerDecoder):
         self,
         prev_output_tokens,
         context_tokens,
-        encoder_out: Optional[EncoderOut] = None,
+        encoder_out: Optional[Dict[str, List[Tensor]]],
         incremental_state: Optional[Dict[str, Dict[str, Optional[Tensor]]]] = None,
         full_context_alignment: bool = False,
         alignment_layer: Optional[int] = None,
@@ -364,8 +364,15 @@ class ContextualTransformerDecoder(TransformerDecoder):
                 self_attn_mask = None
             x, layer_attn, _ = layer(
                 x,
-                encoder_out.encoder_out if encoder_out is not None else None,
-                encoder_out.encoder_padding_mask if encoder_out is not None else None,
+                encoder_out["encoder_out"][0]
+                if (encoder_out is not None and len(encoder_out["encoder_out"]) > 0)
+                else None,
+                encoder_out["encoder_padding_mask"][0]
+                if (
+                    encoder_out is not None
+                    and len(encoder_out["encoder_padding_mask"]) > 0
+                )
+                else None,
                 incremental_state,
                 self_attn_mask=self_attn_mask,
                 self_attn_padding_mask=self_attn_padding_mask,
@@ -383,10 +390,10 @@ class ContextualTransformerDecoder(TransformerDecoder):
                 cross_attn = cross_attn[:alignment_heads]
 
             # average probabilities over heads
-            if self_attn.dim() == 4:
-                self_attn = self_attn.mean(dim=0)
-            if cross_attn.dim() == 4:
-                cross_attn = cross_attn.mean(dim=0)
+            # if self_attn.dim() == 4:
+            #     self_attn = self_attn.mean(dim=0)
+            # if cross_attn.dim() == 4:
+            #     cross_attn = cross_attn.mean(dim=0)
 
         # remove context
         if (not self.training) or not self.context_loss:
@@ -486,6 +493,7 @@ class TransformerDecoderLayerReturnSelfAttention(TransformerDecoderLayer):
             key_padding_mask=self_attn_padding_mask,
             incremental_state=incremental_state,
             need_weights=True,
+            need_head_weights=True,
             attn_mask=self_attn_mask,
         )
         x = self.dropout_module(x)
@@ -515,8 +523,8 @@ class TransformerDecoderLayerReturnSelfAttention(TransformerDecoderLayer):
                 key_padding_mask=encoder_padding_mask,
                 incremental_state=incremental_state,
                 static_kv=True,
-                need_weights=need_attn or (not self.training and self.need_attn),
-                need_head_weights=need_head_weights,
+                need_weights=True,
+                need_head_weights=True,
             )
             x = self.dropout_module(x)
             x = self.residual_connection(x, residual)
@@ -545,9 +553,7 @@ class TransformerDecoderLayerReturnSelfAttention(TransformerDecoderLayer):
                 ]
             else:
                 self_attn_state = [saved_state["prev_key"], saved_state["prev_value"]]
-            #print("onnx size ", attn.size(), self_attn_state.size())
             return x, attn, self_attn_state
-        #print("attentions size ", self_attn.size(), cross_attn.size())
         return x, [cross_attn, self_attn], None
 
 

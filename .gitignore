@@ -131,3 +131,7 @@ dmypy.json
 .vscode/
 outputs/
 data/
+checkpoints/
+logs/
+*.sh
+*.out

@@ -84,6 +84,15 @@ class ContextualSequenceGenerator(SequenceGenerator):
         # compute the encoder output for each beam
         encoder_outs = self.model.forward_encoder(net_input)
 
+        # encoder_outs = [{
+        #     "encoder_out": encoder_out.encoder_out,
+        #     "encoder_padding_mask": encoder_out.encoder_padding_mask if encoder_out.encoder_padding_mask is not None else torch.empty(0),
+        #     "encoder_embedding": encoder_out.encoder_embedding if encoder_out.encoder_embedding is not None else torch.empty(0), 
+        #     "encoder_states": encoder_out.encoder_states if encoder_out.encoder_states is not None else [],
+        #     "src_tokens": encoder_out.src_tokens if encoder_out.src_tokens is not None else torch.empty(0),
+        #     "src_lengths": encoder_out.src_lengths if encoder_out.src_lengths is not None else torch.empty(0)
+        # } for encoder_out in encoder_outs]
+
         # placeholder of indices for bsz * beam_size to hold tokens and accumulative scores
         new_order = torch.arange(bsz).view(-1, 1).repeat(1, beam_size).view(-1)
         new_order = new_order.to(src_tokens.device).long()
@@ -163,6 +172,10 @@ class ContextualSequenceGenerator(SequenceGenerator):
                     decoder_context, reorder_state
                 )
 
+            #print("ENCODER ", encoder_outs)
+            
+            #encoder_outs = [EncoderOut(**encoder_out) for encoder_out in encoder_outs]
+
             lprobs, avg_attn_scores = self.model.forward_decoder(
                 tokens[:, : step + 1],
                 decoder_context,
@@ -203,12 +216,14 @@ class ContextualSequenceGenerator(SequenceGenerator):
                 lprobs[:, self.eos] = -math.inf
 
             # Record attention scores, only support avg_attn_scores is a Tensor
-            if avg_attn_scores is not None:
-                if attn is None:
-                    attn = torch.empty(
-                        bsz * beam_size, avg_attn_scores.size(1), max_len + 2
-                    ).to(scores)
-                attn[:, :, step + 1].copy_(avg_attn_scores)
+            # if avg_attn_scores is not None:
+            #     if attn is None:
+            #         attn = torch.empty(
+            #             bsz * beam_size, avg_attn_scores.size(1), max_len + 2
+            #         ).to(scores)
+            #     if attn.dim() == 4:
+            #         attn = attn.mean(dim=0)
+            #     attn[:, :, step + 1].copy_(avg_attn_scores)
 
             scores = scores.type_as(lprobs)
             eos_bbsz_idx = torch.empty(0).to(

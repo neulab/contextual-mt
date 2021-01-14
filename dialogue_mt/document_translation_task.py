@@ -3,7 +3,7 @@ from argparse import Namespace
 from fairseq import utils
 from fairseq.tasks import register_task
 from fairseq.tasks.translation import TranslationTask
-from fairseq.data import indexed_dataset, data_utils, encoders, MultiCorpusSampledDataset
+from fairseq.data import indexed_dataset, data_utils, encoders, MultiCorpusSampledDataset, ConcatDataset
 from collections import OrderedDict
 import random
 
@@ -51,9 +51,15 @@ class DocumentTranslationTask(TranslationTask):
         )
         parser.add_argument(
             "--highlight-sample",
-            default=0.5,
+            default=None,
             type=float,
             help="probability to sample highlighted data during training",
+        )
+        parser.add_argument(
+            "--kl-lambda",
+            default=1,
+            type=float,
+            help="lambda weight term for attention KL div loss",
         )
         parser.add_argument(
             "--highlight-on-tag",
@@ -163,31 +169,36 @@ class DocumentTranslationTask(TranslationTask):
                 shuffle=True,
             )
 
-        if (self.args.regularize_heads is not None) and (split == "train"):
+        if (self.args.regularize_heads is not None) and (split == "train"): #(split != "test"):
             # Load highlighted data
-            if split_exists('highlighted', src, tgt, src, data_path):
-                prefix = os.path.join(data_path, "{}.{}-{}.".format('highlighted', src, tgt))
-            elif split_exists('highlighted', tgt, src, src, data_path):
-                prefix = os.path.join(data_path, "{}.{}-{}.".format('highlighted', tgt, src))
+            split_path = f"highlighted.{split}"
+            if split_exists(split_path, src, tgt, src, data_path):
+                prefix = os.path.join(data_path, "{}.{}-{}.".format(split_path, src, tgt))
+            elif split_exists(split_path, tgt, src, src, data_path):
+                prefix = os.path.join(data_path, "{}.{}-{}.".format(split_path, tgt, src))
             else:
                 raise FileNotFoundError(
-                    "Dataset not found: {} ({})".format('highlighted', data_path)
+                    "Dataset not found: {} ({})".format(split_path, data_path)
                 )
+            
 
             h_src_dataset = data_utils.load_indexed_dataset(
                 prefix + src, self.src_dict, self.args.dataset_impl
             )
+
             h_tgt_dataset = data_utils.load_indexed_dataset(
                 prefix + tgt, self.tgt_dict, self.args.dataset_impl
             )
 
-            if split_exists('highlighted.context', src, tgt, src, data_path):
-                prefix = os.path.join(data_path, "{}.{}-{}.".format('highlighted.context', src, tgt))
+            split_path = f"highlighted.{split}.context"
+
+            if split_exists(split_path, src, tgt, src, data_path):
+                prefix = os.path.join(data_path, "{}.{}-{}.".format(split_path, src, tgt))
             elif split_exists('highlighted.context', tgt, src, src, data_path):
-                prefix = os.path.join(data_path, "{}.{}-{}.".format('highlighted.context', tgt, src))
+                prefix = os.path.join(data_path, "{}.{}-{}.".format(split_path, tgt, src))
             else:
                 raise FileNotFoundError(
-                    "Dataset not found: {} ({})".format('highlighted.context', data_path)
+                    "Dataset not found: {} ({})".format(split_path, data_path)
                 )
             h_src_ctx_dataset = data_utils.load_indexed_dataset(
                 prefix + src, self.src_dict, self.args.dataset_impl
@@ -221,7 +232,11 @@ class DocumentTranslationTask(TranslationTask):
                 else:
                     return x[0]
 
-            self.datasets[split] = MultiCorpusSampledDataset(OrderedDict({"highlighted": highlighted_data, "main": main_data}), sampler)
+            if split == "train":
+                self.datasets[split] = MultiCorpusSampledDataset(OrderedDict({"highlighted": highlighted_data, "main": main_data}), sampler)
+            else:
+                #self.datasets[split] = ConcatDataset([highlighted_data, main_data])
+                self.datasets[split] = MultiCorpusSampledDataset(OrderedDict({"highlighted": highlighted_data, "main": main_data}))
 
             
         else:

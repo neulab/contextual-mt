@@ -3,7 +3,7 @@ import numpy as np
 
 from collections import defaultdict
 
-from fairseq.data import data_utils, FairseqDataset 
+from fairseq.data import data_utils, FairseqDataset, MMapIndexedDataset
 
 
 def collate(samples, pad_id, eos_id, sort_by_src=False):
