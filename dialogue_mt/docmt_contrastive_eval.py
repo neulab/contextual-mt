@@ -22,16 +22,23 @@ import sacrebleu
 from comet.models import download_model
 
 
-def load_contrapro(
+def load_contrastive(
     source_file,
     target_file,
     src_context_file,
     tgt_context_file,
-    pronouns=("Er", "Sie", "Es"),
+    dataset="contrapro",
 ):
     """
-    reads the contrapro dataset
+    reads the contrapro or bawden contrastive dataset
     """
+    if dataset == "contrapro":
+        pronouns = ("Er", "Sie", "Es")
+    elif dataset == "bawden":
+        pronouns = None
+    else:
+        raise ValueError("should not get here")
+
     # load files needed
     # and binarize
     with open(source_file, "r") as src_f, open(target_file, "r") as tgt_f, open(
@@ -56,13 +63,15 @@ def load_contrapro(
             len(src_ctx_lines) % len(src_lines) == 0
         ), "src_context file lines aren't multiple of source lines"
         included_context_size = len(src_ctx_lines) // len(src_lines)
+
         index = 0
         while index < len(src_lines):
             i = 0
             src = None
             tgts = []
             while (index + i) < len(src_lines) and (
-                src is None or src == src_lines[index + i]
+                (dataset == "contrapro" and (src is None or src == src_lines[index + i])) or
+                (dataset == "bawden" and (i < 2))
             ):
                 src = src_lines[index + i]
                 tgt = tgt_lines[index + i]
@@ -83,17 +92,21 @@ def load_contrapro(
             # doesn't work, just count the pron that
             # appears more times
             max_count, best_pron = 0, None
-            for pron in pronouns:
-                if pron.lower() in tokenized_gold:
-                    best_pron = pron
-                    max_count = 1
-                    break
-                count = lower_gold.count(pron.lower())
-                if count > max_count:
-                    best_pron = pron
-                    max_count = count
-            if max_count == 0:
-                raise ValueError(f"no pronoun found in one of the sentences: {tgts[0]}")
+            if pronouns is not None:
+                for pron in pronouns:
+                    if pron.lower() in tokenized_gold:
+                        best_pron = pron
+                        max_count = 1
+                        break
+                    count = lower_gold.count(pron.lower())
+                    if count > max_count:
+                        best_pron = pron
+                        max_count = count
+                if max_count == 0:
+                    raise ValueError(f"no pronoun found in one of the sentences: {tgts[0]}")
+            else:
+                best_pron = None
+            
             tgt_labels.append(best_pron)
 
             srcs.append(src.strip())
@@ -118,11 +131,12 @@ def main():
     parser.add_argument("--target-context-size", default=0, type=int)
     parser.add_argument("--source-lang", default=None)
     parser.add_argument("--target-lang", default=None)
-    parser.add_argument("--included-context-size", default=3, type=int)
+    parser.add_argument("--dataset", choices=("contrapro", "bawden"), default="contrapro")
     parser.add_argument(
         "--path", required=True, metavar="FILE", help="path to model file"
     )
     parser.add_argument("--checkpoint-file", default="checkpoint_best.pt")
+    parser.add_argument("--save-scores", default=None, type=str)
     parser.add_argument(
         "--batch-size",
         type=int,
@@ -167,8 +181,9 @@ def main():
         tgt_spm.Load(os.path.join(args.path, f"spm.{args.target_lang}.model"))
 
     # load files
-    srcs, all_tgts, tgt_labels, srcs_contexts, tgts_contexts = load_contrapro(
-        args.source_file, args.target_file, args.src_context_file, args.tgt_context_file
+    srcs, all_tgts, tgt_labels, srcs_contexts, tgts_contexts = load_contrastive(
+        args.source_file, args.target_file, args.src_context_file, args.tgt_context_file,
+        dataset=args.dataset
     )
     # and binarize
     srcs = [encode(s, src_spm, src_dict) for s in srcs]
@@ -183,6 +198,8 @@ def main():
     label_corrects = {label: [] for label in set(tgt_labels)}
     bar = tqdm.tqdm(total=sum(1 for _ in srcs))
     corrects = []
+    attentions, src_log, src_context_log, tgt_context_log, tgt_log = [], [], [], [], []
+    all_scores = []
     for src, src_ctx, contr_tgts, tgt_ctx, label in zip(
         srcs, srcs_context, all_tgts, tgts_context, tgt_labels
     ):
@@ -232,7 +249,7 @@ def main():
                     "src_context": src_ctx_tensor,
                     "target": full_tgt,
                     "tgt_context": tgt_ctx_tensor,
-                }
+                } 
             samples.append(sample)
 
         if concat_model:
@@ -249,16 +266,47 @@ def main():
         sample = utils.move_to_cuda(sample)
         hyps = scorer.generate(models, sample)
         scores = [h[0]["score"] for h in hyps]
+        all_scores = all_scores + scores
 
-        correct = torch.argmax(torch.stack(scores)) == 0
+        most_likely = torch.argmax(torch.stack(scores))
+        correct = most_likely == 0
         corrects.append(correct)
         label_corrects[label].append(correct)
+
+        # save info for attention visualization
+        attentions.append(hyps[most_likely][0]["attention"])
+        src_log.append(src_dict.string(samples[most_likely]["source"]) + " <eos>")
+        src_context_log.append(src_dict.string(samples[most_likely]["src_context"]) + " <eos>")
+        tgt_context_log.append("<eos> " + tgt_dict.string(samples[most_likely]["tgt_context"]))
+        tgt_log.append("<eos> " + tgt_dict.string(samples[most_likely]["target"]))
+
         bar.update(1)
 
-    print(f"Pronoun accs...")
-    for label, l_corrects in label_corrects.items():
-        print(f" {label}: {torch.stack(l_corrects).float().mean().item()}")
+    bar.close()
+
+    if None not in label_corrects:
+        print(f"Pronoun accs...")
+        for label, l_corrects in label_corrects.items():
+            print(f" {label}: {torch.stack(l_corrects).float().mean().item()}")
     print(f"Total Acc: {torch.stack(corrects).float().mean().item()}")
+
+    print("Saving info")
+    with open("log.json", "w") as f:
+        for src, src_context, tgt, tgt_context, attention, correct in zip(src_log, src_context_log, tgt_log, tgt_context_log, attentions, corrects):
+            d = json.dumps({
+                "correct": correct.item(),
+                "source": src,
+                "source_context": src_context,
+                "target": tgt,
+                "target_context": tgt_context,
+                "attention": attention.tolist()
+            })
+            print(d, file=f)
+    
+    if args.save_scores is not None:
+        with open(args.save_scores, "w") as f:
+            for score in all_scores:
+                print(score.item(), file=f)
 
 
 if __name__ == "__main__":
