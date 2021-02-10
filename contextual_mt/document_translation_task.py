@@ -8,7 +8,7 @@ from fairseq.data import indexed_dataset, data_utils, encoders
 import os
 import json
 
-from dialogue_mt import ContextualDataset, ContextualSequenceGenerator
+from contextual_mt import ContextualDataset, ContextualSequenceGenerator
 
 
 @register_task("document_translation")

@@ -9,11 +9,11 @@ from fairseq import utils, hub_utils
 
 import sentencepiece as sp
 
-import dialogue_mt  # noqa: F401
-from dialogue_mt.contextual_dataset import collate
-from dialogue_mt import ContextualSequenceGenerator
+import contextual_mt  # noqa: F401
+from contextual_mt.contextual_dataset import collate
+from contextual_mt import ContextualSequenceGenerator
 
-from dialogue_mt.utils import encode, decode, create_context
+from contextual_mt.utils import encode, decode, create_context
 
 
 def main():

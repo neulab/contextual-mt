@@ -11,11 +11,11 @@ from fairseq.sequence_scorer import SequenceScorer
 
 import sentencepiece as sp
 
-import dialogue_mt  # noqa: F401
-from dialogue_mt import DocumentTranslationTask
-from dialogue_mt.contextual_dataset import collate as contextual_collate
+import contextual_mt  # noqa: F401
+from contextual_mt import DocumentTranslationTask
+from contextual_mt.contextual_dataset import collate as contextual_collate
 from fairseq.data.language_pair_dataset import collate as raw_collate
-from dialogue_mt.utils import encode, decode, create_context
+from contextual_mt.utils import encode, decode, create_context
 
 import sacrebleu
 
