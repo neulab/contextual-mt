@@ -1,19 +1,19 @@
-# Dialogue MT
+# Contextual  ML
 
-Implementations of context-aware models for document and dialogue translation on fairseq.
+Implementations of context-aware models for document-level translation tasks, used in [Measuring and Incresing Context Usage in Context-Aware Machine Translation](FIXME)
 
 Currently supports:
 
-<a href="https://arxiv.org/pdf/1708.05943.pdf"> Neural Machine Translation with Extended Context</a>
+* Training concatenation-based document-level machine translation models
+* Training CoWord dropout and dynamic context size
+* Measuring CXMI for models 
 
-* N+M concatenation models with speaker and break tags.
-* (WIP) source dropout
 
 ## Requirements 
 
-* [Fairseq](https://github.com/pytorch/fairseq) >= 0.9.0
-* [Sacremoses](https://github.com/alvations/sacremoses) >= 0.0.42
-* [FastBPE](https://github.com/glample/fastBPE) >= 0.1.0
+* [Fairseq](https://github.com/pytorch/fairseq) >= 0.10.2
+* [SentencePiece](https://github.com/google/sentencepiece) >= 0.1.90
+* [COMET](https://github.com/Unbabel/COMET)
 * Python >= 3.6
 
 Also run 
@@ -67,7 +67,7 @@ You can train using fairseq's training tool. Just select the `document_translati
 
 ```bash
 fairseq-train \
-    ${bin_dir} --user-dir $REPO/dialogue_mt \
+    ${bin_dir} --user-dir $REPO/contextual_mt \
     --task document_translation \
     --source-context-size $N --target-context-size $M \
     --log-interval 10 \
@@ -84,8 +84,6 @@ fairseq-train \
     --save-dir ${checkpoint_dir} --no-epoch-checkpoints
 ```
 
-### Dialogue Translation
-
 ## Inference and Evaluation
 
 You can then run inference
@@ -93,7 +91,7 @@ You can then run inference
 ```bash
 cp ${data_dir}/dict.*txt ${data_dir}/spm* $CHECKPOINTS_DIR
 
-python dialogue_mt/docmt_translate.py \
+python contextual_mt/docmt_translate.py \
     --path $checkpoint_dir \
     --source-lang src --target-lang tgt \
     --source-file ${data_dir}/test.src \
@@ -116,7 +114,7 @@ python scripts/score.py ${predictions_dir}/test.pred.tgt ${data_dir}/test.tgt \
 To run contrastive evaluation on ContraPro
 
 ```bash
-python dialogue_mt/docmt_contrastive_eval.py \
+python contextual_mt/docmt_contrastive_eval.py \
     --source-lang en --target-lang de \
     --source-file $source_contr \
     --src-context-file $source_ctx_contr \
