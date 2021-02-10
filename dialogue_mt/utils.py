@@ -20,8 +20,6 @@ def create_context(sentences, context_size, break_id=None, eos_id=None):
         if context and break_id is not None:
             context.append(torch.tensor([break_id]))
         context.append(s)
-    if len(context) > context_size:
-        breakpoint()
     if eos_id is not None:
         context.append(torch.tensor([eos_id]))
     return torch.cat(context) if context else torch.tensor([]).long()

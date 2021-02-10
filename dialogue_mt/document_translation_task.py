@@ -30,6 +30,11 @@ class DocumentTranslationTask(TranslationTask):
             help="number of previous target sentences/messages to include in the context",
         )
         parser.add_argument(
+            "--sample-context-size",
+            default=False,
+            action='store_true',
+        )
+        parser.add_argument(
             "--break-tag",
             default="<brk>",
             type=str,
@@ -39,7 +44,7 @@ class DocumentTranslationTask(TranslationTask):
             "--pos-drop-probs",
             nargs="+",
             type=str,
-            help="",
+            help="Pass probabilities for dropping per POS tag. NOTE: not use for experiments",
         )
 
     def build_model(self, args):
@@ -103,6 +108,9 @@ class DocumentTranslationTask(TranslationTask):
         with open(prefix + "docids", "r") as f:
             doc_ids = [int(idx) for idx in f]
 
+        # checks for POS tags for every token in the training set
+        # so we can have specific probabilites per POS
+        # NOTE: not used during the paper
         pos_tags = None
         if split == "train" and os.path.exists(f"{prefix}pos.{src}"):
             with open(f"{prefix}pos.{src}", "r") as f:
@@ -126,5 +134,6 @@ class DocumentTranslationTask(TranslationTask):
             src_pos_tags=pos_tags,
             pos_drop_probs=pos_drop_probs,
             break_tag=self.args.break_tag,
+            sample_context_size=self.args.sample_context_size,
             shuffle=True,
         )

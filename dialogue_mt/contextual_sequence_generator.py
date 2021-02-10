@@ -163,6 +163,7 @@ class ContextualSequenceGenerator(SequenceGenerator):
                     decoder_context, reorder_state
                 )
 
+
             lprobs, avg_attn_scores = self.model.forward_decoder(
                 tokens[:, : step + 1],
                 decoder_context,
@@ -201,14 +202,6 @@ class ContextualSequenceGenerator(SequenceGenerator):
             elif step < self.min_len:
                 # minimum length constraint (does not apply if using prefix_tokens)
                 lprobs[:, self.eos] = -math.inf
-
-            # Record attention scores, only support avg_attn_scores is a Tensor
-            if avg_attn_scores is not None:
-                if attn is None:
-                    attn = torch.empty(
-                        bsz * beam_size, avg_attn_scores.size(1), max_len + 2
-                    ).to(scores)
-                attn[:, :, step + 1].copy_(avg_attn_scores)
 
             scores = scores.type_as(lprobs)
             eos_bbsz_idx = torch.empty(0).to(

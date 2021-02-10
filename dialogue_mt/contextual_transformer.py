@@ -40,19 +40,20 @@ class ContextualTransformerModel(TransformerModel):
         TransformerModel.add_args(parser)
         parser.add_argument('--context-loss', default=False, action='store_true',
                             help='if set, trains to predict target context tokens')
-        parser.add_argument('--source-dropout', default=0.0, type=float,
+        parser.add_argument('--coword-dropout', default=0.0, type=float,
                             help='if set to value>0, randomly drops source tokens')
-        parser.add_argument('--source-dropout-type', 
+        parser.add_argument('--coword-dropout-type', 
                             choices=("sample", "predefined_sample", "whole", "suffix"), 
                             default='sample',
-                            help='')
+                            help='type of coword dropout to use. NOTE: only sample is used'
+                                 'used in the paper')
 
     @classmethod
     def build_encoder(cls, args, src_dict, embed_tokens):
         return ContextualTransformerEncoder(
             args, src_dict, embed_tokens,
-            source_dropout_prob=getattr(args,"source_dropout", 0.0),
-            source_dropout_type=getattr(args, "source_dropout_type", "sample"))
+            coword_dropout_prob=getattr(args,"coword_dropout", 0.0),
+            coword_dropout_type=getattr(args, "coword_dropout_type", "sample"))
 
     @classmethod
     def build_decoder(cls, args, tgt_dict, embed_tokens):
@@ -60,8 +61,7 @@ class ContextualTransformerModel(TransformerModel):
             args,
             tgt_dict,
             embed_tokens,
-            no_encoder_attn=getattr(args, "no_cross_attention", False),
-            context_loss=getattr(args, "context_loss", False)
+            no_encoder_attn=getattr(args, "no_cross_attention", False)
         )
 
     # TorchScript doesn't support optional arguments with variable length (**kwargs).
@@ -106,25 +106,17 @@ class ContextualTransformerModel(TransformerModel):
         )
         return decoder_out
 
-    def get_targets(self, sample, net_output):
-        """Get targets from either the sample or the net's output."""
-        if self.training and self.decoder.context_loss:
-            target = torch.cat([sample["context_target"], sample["target"]], axis=1)
-        else:
-            target = sample["target"]
-        return target
-
 
 class ContextualTransformerEncoder(TransformerEncoder):
     def __init__(
         self, 
         args, dictionary, embed_tokens, 
-        source_dropout_type="sample",
-        source_dropout_prob=0.
+        coword_dropout_type="sample",
+        coword_dropout_prob=0.
     ):
         super().__init__(args, dictionary, embed_tokens)
-        self.source_dropout_type = source_dropout_type
-        self.source_dropout_prob = source_dropout_prob
+        self.coword_dropout_type = coword_dropout_type
+        self.coword_dropout_prob = coword_dropout_prob
         # TODO: add this a variable token
         self.mask_id = dictionary.index("<mask>")
 
@@ -137,16 +129,15 @@ class ContextualTransformerEncoder(TransformerEncoder):
         src_sample_probs=None,
         return_all_hiddens: bool = False,
     ):
-
         # if source dropout enabled, randomly drop tokens from input
-        if self.training and self.source_dropout_type != None:
-            if self.source_dropout_type == "sample":
+        if self.training and self.coword_dropout_type != None:
+            if self.coword_dropout_type == "sample":
                 padding_mask = src_tokens.eq(self.padding_idx)
                 mask_token = torch.tensor(self.mask_id).to(src_tokens)
-                probs = torch.ones_like(src_tokens) * self.source_dropout_prob
+                probs = torch.ones_like(src_tokens) * self.coword_dropout_prob
                 mask = torch.logical_and(torch.bernoulli(probs), torch.logical_not(padding_mask))
                 src_tokens = torch.where(mask == 0, src_tokens, mask_token)
-            elif self.source_dropout_type == "predefined_sample":
+            elif self.coword_dropout_type == "predefined_sample":
                 # This is used for sampling with token specific probabilies
                 # NOTE: this was not used in the paper
                 assert src_sample_probs is not None, "need sample probabilities as a given"
@@ -154,21 +145,19 @@ class ContextualTransformerEncoder(TransformerEncoder):
                 mask_token = torch.tensor(self.mask_id).to(src_tokens)
                 mask = torch.logical_and(torch.bernoulli(src_sample_probs), torch.logical_not(padding_mask))
                 src_tokens = torch.where(mask == 0, src_tokens, mask_token)
-            elif self.source_dropout_type == "whole":
+            elif self.coword_dropout_type == "whole":
                 # make tensor with a single token (mask token)
+                # NOTE: not used in the paper
                 mask_samples = torch.zeros_like(src_tokens).to(src_tokens)
                 mask_samples[mask_samples==0] = self.padding_idx
                 mask_samples[:, 0] = self.mask_id
                 # replace samples by this tensor based on bernoulli
-                probs = torch.ones((src_tokens.size(0),)) * self.source_dropout_prob
+                probs = torch.ones((src_tokens.size(0),)) * self.coword_dropout_prob
                 mask = torch.bernoulli(probs).to(src_tokens)
                 mask = torch.unsqueeze(mask, -1).repeat(1, src_tokens.size(1))
                 src_tokens = torch.where(mask==0, src_tokens, mask_samples)
-            elif self.source_dropout_type == "suffix":
-                # mask random sample
-                pass
             else:
-                raise ValueError(f"unknown type of source dropout {self.source_dropout_type}")
+                raise ValueError(f"unknown type of source dropout {self.coword_dropout_type}")
 
         # Encode source tokens
         # as simple context encoding, we just concatenate context to input
@@ -203,9 +192,8 @@ class ContextualTransformerEncoder(TransformerEncoder):
 
 
 class ContextualTransformerDecoder(TransformerDecoder):
-    def __init__(self, args, dictionary, embed_tokens, no_encoder_attn=False, context_loss=False):
+    def __init__(self, args, dictionary, embed_tokens, no_encoder_attn=False):
         super().__init__(args, dictionary, embed_tokens, no_encoder_attn)
-        self.context_loss = context_loss
 
     def forward(
         self,
@@ -224,6 +212,8 @@ class ContextualTransformerDecoder(TransformerDecoder):
         Args:
             prev_output_tokens (LongTensor): previous decoder outputs of shape
                 `(batch, tgt_len)`, for teacher forcing
+            context_tokens (LongTensor): context tokens (ie a prefix 
+                to prev_output_tokens), shape `(batch, tgt_ctx_len)`
             encoder_out (optional): output from the encoder, used for
                 encoder-side attention
             incremental_state (dict): dictionary used for storing state during
@@ -388,8 +378,7 @@ class ContextualTransformerDecoder(TransformerDecoder):
                 attn = attn.mean(dim=0)
 
         # remove context
-        if (not self.training) or not self.context_loss:
-            x = x[context_end_id:]
+        x = x[context_end_id:]      
 
         if self.layer_norm is not None:
             x = self.layer_norm(x)

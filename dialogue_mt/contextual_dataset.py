@@ -110,6 +110,30 @@ def collate(samples, pad_id, eos_id, sort_by_src=False):
 
 
 class ContextualDataset(FairseqDataset):
+    """
+    A pair of torch.utils.data.Datasets with a contextual structure
+
+    Args:
+        src (torch.utils.data.Dataset): source dataset to wrap
+        src_sizes (List[int]): source sentence lengths
+        src_dict (~fairseq.data.Dictionary): source vocabulary
+        tgt (torch.utils.data.Dataset): target dataset to wrap
+        tgt_sizes (List[int]): target sentence lengths
+        tgt_dict (~fairseq.data.Dictionary, optional): target vocabulary
+        contextual_ids (List[int]): List of indices associating every sample
+            to a "document"
+        source_context_size (int): the number o sentences to pass in the source
+            context
+        target_context_size (int): the number of sentences to pass in the target
+            context
+        pos_drop_probs: NOT USED
+        src_pos_targ: NOT USED
+        sampled_context_size (bool): if set, context sizes will be sampled in 
+            a between 0 and `src/tgt_ctx_size` (default: False)
+        break_tag: token used to separate context sentences 
+        shuffle (bool, optional): shuffle dataset elements before batching
+            (default: True).
+    """.
     def __init__(
         self,
         src,
@@ -124,6 +148,7 @@ class ContextualDataset(FairseqDataset):
         pos_drop_probs=None,
         src_pos_tags=None,
         break_tag=None,
+        sample_context_size=False,
         shuffle=True,
     ):
         assert src_dict.pad() == tgt_dict.pad()
@@ -142,6 +167,7 @@ class ContextualDataset(FairseqDataset):
         self.tgt_ctx_size = tgt_ctx_size
         self.contextual_ids = np.array(contextual_ids)
         self.break_tag = break_tag
+        self.sample_context_size = sample_context_size
         self.shuffle = shuffle
 
         # recompute sizes  based on context size and special tokens
@@ -162,6 +188,8 @@ class ContextualDataset(FairseqDataset):
 
         self.src_sizes = np.array(full_src_sizes)
         self.tgt_sizes = np.array(full_tgt_sizes)
+        
+        # NOTE: not used in the paper 
         if pos_drop_probs is not None:
             self.pos_drop_probs = defaultdict(lambda: 0.0)
             for pos, p in pos_drop_probs.items():
@@ -179,7 +207,12 @@ class ContextualDataset(FairseqDataset):
         src_break_id = torch.tensor([self.src_dict.index(self.break_tag)])
         tgt_break_id = torch.tensor([self.tgt_dict.index(self.break_tag)])
         if self.src_ctx_size > 0:
-            for i in range(1, self.src_ctx_size + 1):
+            if self.sample_context_size:
+                src_context_size = np.random.randint(0, self.src_ctx_size+1)
+            else:
+                src_context_size = self.src_ctx_size 
+
+            for i in range(1, src_context_size + 1):
                 # break if previous sample is from a different context (doc/chat)
                 if self.contextual_ids[index - i] != self.contextual_ids[index]:
                     break
@@ -188,8 +221,14 @@ class ContextualDataset(FairseqDataset):
                     src_ctx_item = torch.cat([src_break_id, src_ctx_item])
 
                 src_ctx_item = torch.cat([self.src[index - i][:-1], src_ctx_item])
+
         if self.tgt_ctx_size > 0:
-            for i in range(1, self.tgt_ctx_size + 1):
+            if self.sample_context_size:
+                tgt_context_size = np.random.randint(0, self.tgt_ctx_size+1)
+            else:
+                tgt_context_size = self.tgt_ctx_size
+
+            for i in range(1, tgt_context_size + 1):
                 if self.contextual_ids[index - i] != self.contextual_ids[index]:
                     break
                 if len(tgt_ctx_item) > 0 and self.break_tag is not None:
@@ -233,7 +272,8 @@ class ContextualDataset(FairseqDataset):
     def num_tokens(self, index):
         """Return the number of tokens in a sample. This value is used to
         enforce ``--max-tokens`` during batching."""
-        # FIXME: incoporate context size here
+        # FIXME: do something about the sample_context_size. currently it always
+        # assumes the maximum context size, so this might lead to underusage of gpu
         return max(
             self.src_sizes[index],
             self.tgt_sizes[index] if self.tgt_sizes is not None else 0,
@@ -242,7 +282,6 @@ class ContextualDataset(FairseqDataset):
     def size(self, index):
         """Return an example's size as a float or tuple. This value is used when
         filtering a dataset with ``--max-positions``."""
-        # FIXME: incoporate context size here
         return (
             self.src_sizes[index],
             self.tgt_sizes[index] if self.tgt_sizes is not None else 0,
