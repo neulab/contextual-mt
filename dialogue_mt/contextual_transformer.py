@@ -147,6 +147,8 @@ class ContextualTransformerEncoder(TransformerEncoder):
                 mask = torch.logical_and(torch.bernoulli(probs), torch.logical_not(padding_mask))
                 src_tokens = torch.where(mask == 0, src_tokens, mask_token)
             elif self.source_dropout_type == "predefined_sample":
+                # This is used for sampling with token specific probabilies
+                # NOTE: this was not used in the paper
                 assert src_sample_probs is not None, "need sample probabilities as a given"
                 padding_mask = src_tokens.eq(self.padding_idx)
                 mask_token = torch.tensor(self.mask_id).to(src_tokens)
@@ -180,7 +182,7 @@ class ContextualTransformerEncoder(TransformerEncoder):
         # B x T x C -> T x B x C
         x = x.transpose(0, 1)
 
-        x_encoder_states = [] if return_all_hiddens else None
+        x_encoder_states = []
         for layer in self.layers:
             x = layer(x, padding_mask)
             if return_all_hiddens:
@@ -190,14 +192,14 @@ class ContextualTransformerEncoder(TransformerEncoder):
         if self.layer_norm is not None:
             x = self.layer_norm(x)
 
-        return EncoderOut(
-            encoder_out=x,  # T x B x C
-            encoder_padding_mask=padding_mask,  # B x T
-            encoder_embedding=encoder_embedding,  # B x T x C
-            encoder_states=x_encoder_states,  # List[T x B x C]
-            src_tokens=None,
-            src_lengths=None,
-        )
+        return {
+            "encoder_out": [x],  # T x B x C
+            "encoder_padding_mask": [padding_mask],  # B x T
+            "encoder_embedding": [encoder_embedding],  # B x T x C
+            "encoder_states": x_encoder_states,  # List[T x B x C]
+            "src_tokens": torch.empty(0),
+            "src_lengths": torch.empty(0),
+        }
 
 
 class ContextualTransformerDecoder(TransformerDecoder):
@@ -209,7 +211,7 @@ class ContextualTransformerDecoder(TransformerDecoder):
         self,
         prev_output_tokens,
         context_tokens,
-        encoder_out: Optional[EncoderOut] = None,
+        encoder_out: Optional[Dict[str, List[Tensor]]] = None,
         incremental_state: Optional[Dict[str, Dict[str, Optional[Tensor]]]] = None,
         features_only: bool = False,
         full_context_alignment: bool = False,
@@ -252,7 +254,7 @@ class ContextualTransformerDecoder(TransformerDecoder):
         self,
         prev_output_tokens,
         context_tokens,
-        encoder_out: Optional[EncoderOut] = None,
+        encoder_out: Optional[Dict[str, List[Tensor]]],
         incremental_state: Optional[Dict[str, Dict[str, Optional[Tensor]]]] = None,
         full_context_alignment: bool = False,
         alignment_layer: Optional[int] = None,
@@ -278,7 +280,7 @@ class ContextualTransformerDecoder(TransformerDecoder):
         self,
         prev_output_tokens,
         context_tokens,
-        encoder_out: Optional[EncoderOut] = None,
+        encoder_out: Optional[Dict[str, List[Tensor]]],
         incremental_state: Optional[Dict[str, Dict[str, Optional[Tensor]]]] = None,
         full_context_alignment: bool = False,
         alignment_layer: Optional[int] = None,
@@ -301,7 +303,7 @@ class ContextualTransformerDecoder(TransformerDecoder):
                 - a dictionary with any model-specific outputs
         """
         if alignment_layer is None:
-            alignment_layer = self.num_layers - 1
+            alignment_layer =  0 #self.num_layers - 1
 
         # concat context_tokens to input
         # FIXME: this is really simple
@@ -357,9 +359,16 @@ class ContextualTransformerDecoder(TransformerDecoder):
             else:
                 self_attn_mask = None
             x, layer_attn, _ = layer(
-                x,
-                encoder_out.encoder_out if encoder_out is not None else None,
-                encoder_out.encoder_padding_mask if encoder_out is not None else None,
+                x,                
+                encoder_out["encoder_out"][0]
+                if (encoder_out is not None and len(encoder_out["encoder_out"]) > 0)
+                else None,
+                encoder_out["encoder_padding_mask"][0]
+                if (
+                    encoder_out is not None
+                    and len(encoder_out["encoder_padding_mask"]) > 0
+                    )
+                else None,
                 incremental_state,
                 self_attn_mask=self_attn_mask,
                 self_attn_padding_mask=self_attn_padding_mask,
@@ -392,7 +401,6 @@ class ContextualTransformerDecoder(TransformerDecoder):
             x = self.project_out_dim(x)
 
         return x, {"attn": [attn], "inner_states": inner_states}
-
     
 
 
@@ -407,5 +415,5 @@ def contextual_transformer_iwslt_architecture(args):
 
 
 @register_model_architecture("contextual_transformer", "contextual_transformer_big")
-def contextual_transformer_iwslt_architecture(args):
+def contextual_transformer_big_architecture(args):
     transformer_vaswani_wmt_en_de_big(args)
