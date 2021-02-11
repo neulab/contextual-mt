@@ -7,11 +7,7 @@ import math
 from typing import Dict, List, Optional
 
 import torch
-import torch.nn as nn
-from fairseq import search, utils
 from fairseq.sequence_generator import SequenceGenerator, EnsembleModel
-from fairseq.data import data_utils
-from fairseq.models import FairseqIncrementalDecoder
 from fairseq.models.fairseq_encoder import EncoderOut
 from torch import Tensor
 

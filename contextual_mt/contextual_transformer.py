@@ -1,16 +1,12 @@
 from typing import Optional, List, Dict, Any
 
 import torch
-import torch.nn as nn
 from torch import Tensor
 
-from fairseq import utils
 from fairseq.models import (
     register_model,
     register_model_architecture,
-    ARCH_MODEL_REGISTRY,
 )
-from fairseq.models.fairseq_encoder import FairseqEncoder, EncoderOut
 from fairseq.models.transformer import (
     TransformerModel,
     TransformerEncoder,
@@ -21,15 +17,7 @@ from fairseq.models.transformer import (
     transformer_iwslt_de_en,
     transformer_vaswani_wmt_en_de_big,
 )
-from fairseq.modules import (
-    FairseqDropout,
-    LayerDropModuleList,
-    LayerNorm,
-    PositionalEmbedding,
-)
-from fairseq.modules.quant_noise import quant_noise as apply_quant_noise_
 
-import math
 
 
 @register_model("contextual_transformer")
