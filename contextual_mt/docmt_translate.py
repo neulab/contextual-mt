@@ -215,9 +215,7 @@ def main():
             break
 
         # create batch
-        sample = collate(
-            samples, src_dict.pad(), src_dict.eos()
-        )
+        sample = collate(samples, src_dict.pad(), src_dict.eos())
         sample = utils.move_to_cuda(sample)
         output = pretrained["task"].inference_step(generator, models, sample)
         for batch_idx in range(len(samples)):

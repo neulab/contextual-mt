@@ -38,22 +38,35 @@ class ContextualTransformerModel(TransformerModel):
     def add_args(parser):
         """Add model-specific arguments to the parser."""
         TransformerModel.add_args(parser)
-        parser.add_argument('--context-loss', default=False, action='store_true',
-                            help='if set, trains to predict target context tokens')
-        parser.add_argument('--coword-dropout', default=0.0, type=float,
-                            help='if set to value>0, randomly drops source tokens')
-        parser.add_argument('--coword-dropout-type', 
-                            choices=("sample", "predefined_sample", "whole", "suffix"), 
-                            default='sample',
-                            help='type of coword dropout to use. NOTE: only sample is used'
-                                 'used in the paper')
+        parser.add_argument(
+            "--context-loss",
+            default=False,
+            action="store_true",
+            help="if set, trains to predict target context tokens",
+        )
+        parser.add_argument(
+            "--coword-dropout",
+            default=0.0,
+            type=float,
+            help="if set to value>0, randomly drops source tokens",
+        )
+        parser.add_argument(
+            "--coword-dropout-type",
+            choices=("sample", "predefined_sample", "whole", "suffix"),
+            default="sample",
+            help="type of coword dropout to use. NOTE: only sample is used"
+            "used in the paper",
+        )
 
     @classmethod
     def build_encoder(cls, args, src_dict, embed_tokens):
         return ContextualTransformerEncoder(
-            args, src_dict, embed_tokens,
-            coword_dropout_prob=getattr(args,"coword_dropout", 0.0),
-            coword_dropout_type=getattr(args, "coword_dropout_type", "sample"))
+            args,
+            src_dict,
+            embed_tokens,
+            coword_dropout_prob=getattr(args, "coword_dropout", 0.0),
+            coword_dropout_type=getattr(args, "coword_dropout_type", "sample"),
+        )
 
     @classmethod
     def build_decoder(cls, args, tgt_dict, embed_tokens):
@@ -61,7 +74,7 @@ class ContextualTransformerModel(TransformerModel):
             args,
             tgt_dict,
             embed_tokens,
-            no_encoder_attn=getattr(args, "no_cross_attention", False)
+            no_encoder_attn=getattr(args, "no_cross_attention", False),
         )
 
     # TorchScript doesn't support optional arguments with variable length (**kwargs).
@@ -109,10 +122,12 @@ class ContextualTransformerModel(TransformerModel):
 
 class ContextualTransformerEncoder(TransformerEncoder):
     def __init__(
-        self, 
-        args, dictionary, embed_tokens, 
+        self,
+        args,
+        dictionary,
+        embed_tokens,
         coword_dropout_type="sample",
-        coword_dropout_prob=0.
+        coword_dropout_prob=0.0,
     ):
         super().__init__(args, dictionary, embed_tokens)
         self.coword_dropout_type = coword_dropout_type
@@ -135,34 +150,42 @@ class ContextualTransformerEncoder(TransformerEncoder):
                 padding_mask = src_tokens.eq(self.padding_idx)
                 mask_token = torch.tensor(self.mask_id).to(src_tokens)
                 probs = torch.ones_like(src_tokens) * self.coword_dropout_prob
-                mask = torch.logical_and(torch.bernoulli(probs), torch.logical_not(padding_mask))
+                mask = torch.logical_and(
+                    torch.bernoulli(probs), torch.logical_not(padding_mask)
+                )
                 src_tokens = torch.where(mask == 0, src_tokens, mask_token)
             elif self.coword_dropout_type == "predefined_sample":
                 # This is used for sampling with token specific probabilies
                 # NOTE: this was not used in the paper
-                assert src_sample_probs is not None, "need sample probabilities as a given"
+                assert (
+                    src_sample_probs is not None
+                ), "need sample probabilities as a given"
                 padding_mask = src_tokens.eq(self.padding_idx)
                 mask_token = torch.tensor(self.mask_id).to(src_tokens)
-                mask = torch.logical_and(torch.bernoulli(src_sample_probs), torch.logical_not(padding_mask))
+                mask = torch.logical_and(
+                    torch.bernoulli(src_sample_probs), torch.logical_not(padding_mask)
+                )
                 src_tokens = torch.where(mask == 0, src_tokens, mask_token)
             elif self.coword_dropout_type == "whole":
                 # make tensor with a single token (mask token)
                 # NOTE: not used in the paper
                 mask_samples = torch.zeros_like(src_tokens).to(src_tokens)
-                mask_samples[mask_samples==0] = self.padding_idx
+                mask_samples[mask_samples == 0] = self.padding_idx
                 mask_samples[:, 0] = self.mask_id
                 # replace samples by this tensor based on bernoulli
                 probs = torch.ones((src_tokens.size(0),)) * self.coword_dropout_prob
                 mask = torch.bernoulli(probs).to(src_tokens)
                 mask = torch.unsqueeze(mask, -1).repeat(1, src_tokens.size(1))
-                src_tokens = torch.where(mask==0, src_tokens, mask_samples)
+                src_tokens = torch.where(mask == 0, src_tokens, mask_samples)
             else:
-                raise ValueError(f"unknown type of source dropout {self.coword_dropout_type}")
+                raise ValueError(
+                    f"unknown type of source dropout {self.coword_dropout_type}"
+                )
 
         # Encode source tokens
         # as simple context encoding, we just concatenate context to input
         # TODO: add option for separate encoder
-        # how to do it so that input can still attend to context 
+        # how to do it so that input can still attend to context
         input_tokens = torch.cat([src_ctx_tokens, src_tokens], axis=1)
         padding_mask = input_tokens.eq(self.padding_idx)
 
@@ -212,7 +235,7 @@ class ContextualTransformerDecoder(TransformerDecoder):
         Args:
             prev_output_tokens (LongTensor): previous decoder outputs of shape
                 `(batch, tgt_len)`, for teacher forcing
-            context_tokens (LongTensor): context tokens (ie a prefix 
+            context_tokens (LongTensor): context tokens (ie a prefix
                 to prev_output_tokens), shape `(batch, tgt_ctx_len)`
             encoder_out (optional): output from the encoder, used for
                 encoder-side attention
@@ -293,7 +316,7 @@ class ContextualTransformerDecoder(TransformerDecoder):
                 - a dictionary with any model-specific outputs
         """
         if alignment_layer is None:
-            alignment_layer =  0 #self.num_layers - 1
+            alignment_layer = 0  # self.num_layers - 1
 
         # concat context_tokens to input
         # FIXME: this is really simple
@@ -349,7 +372,7 @@ class ContextualTransformerDecoder(TransformerDecoder):
             else:
                 self_attn_mask = None
             x, layer_attn, _ = layer(
-                x,                
+                x,
                 encoder_out["encoder_out"][0]
                 if (encoder_out is not None and len(encoder_out["encoder_out"]) > 0)
                 else None,
@@ -357,7 +380,7 @@ class ContextualTransformerDecoder(TransformerDecoder):
                 if (
                     encoder_out is not None
                     and len(encoder_out["encoder_padding_mask"]) > 0
-                    )
+                )
                 else None,
                 incremental_state,
                 self_attn_mask=self_attn_mask,
@@ -378,7 +401,7 @@ class ContextualTransformerDecoder(TransformerDecoder):
                 attn = attn.mean(dim=0)
 
         # remove context
-        x = x[context_end_id:]      
+        x = x[context_end_id:]
 
         if self.layer_norm is not None:
             x = self.layer_norm(x)
@@ -390,7 +413,6 @@ class ContextualTransformerDecoder(TransformerDecoder):
             x = self.project_out_dim(x)
 
         return x, {"attn": [attn], "inner_states": inner_states}
-    
 
 
 @register_model_architecture("contextual_transformer", "contextual_transformer")

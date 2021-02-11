@@ -70,8 +70,11 @@ def load_contrastive(
             src = None
             tgts = []
             while (index + i) < len(src_lines) and (
-                (dataset == "contrapro" and (src is None or src == src_lines[index + i])) or
-                (dataset == "bawden" and (i < 2))
+                (
+                    dataset == "contrapro"
+                    and (src is None or src == src_lines[index + i])
+                )
+                or (dataset == "bawden" and (i < 2))
             ):
                 src = src_lines[index + i]
                 tgt = tgt_lines[index + i]
@@ -103,10 +106,12 @@ def load_contrastive(
                         best_pron = pron
                         max_count = count
                 if max_count == 0:
-                    raise ValueError(f"no pronoun found in one of the sentences: {tgts[0]}")
+                    raise ValueError(
+                        f"no pronoun found in one of the sentences: {tgts[0]}"
+                    )
             else:
                 best_pron = None
-            
+
             tgt_labels.append(best_pron)
 
             srcs.append(src.strip())
@@ -131,7 +136,9 @@ def main():
     parser.add_argument("--target-context-size", default=0, type=int)
     parser.add_argument("--source-lang", default=None)
     parser.add_argument("--target-lang", default=None)
-    parser.add_argument("--dataset", choices=("contrapro", "bawden"), default="contrapro")
+    parser.add_argument(
+        "--dataset", choices=("contrapro", "bawden"), default="contrapro"
+    )
     parser.add_argument(
         "--path", required=True, metavar="FILE", help="path to model file"
     )
@@ -182,8 +189,11 @@ def main():
 
     # load files
     srcs, all_tgts, tgt_labels, srcs_contexts, tgts_contexts = load_contrastive(
-        args.source_file, args.target_file, args.src_context_file, args.tgt_context_file,
-        dataset=args.dataset
+        args.source_file,
+        args.target_file,
+        args.src_context_file,
+        args.tgt_context_file,
+        dataset=args.dataset,
     )
     # and binarize
     srcs = [encode(s, src_spm, src_dict) for s in srcs]
@@ -249,7 +259,7 @@ def main():
                     "src_context": src_ctx_tensor,
                     "target": full_tgt,
                     "tgt_context": tgt_ctx_tensor,
-                } 
+                }
             samples.append(sample)
 
         if concat_model:
@@ -276,8 +286,12 @@ def main():
         # save info for attention visualization
         attentions.append(hyps[most_likely][0]["attention"])
         src_log.append(src_dict.string(samples[most_likely]["source"]) + " <eos>")
-        src_context_log.append(src_dict.string(samples[most_likely]["src_context"]) + " <eos>")
-        tgt_context_log.append("<eos> " + tgt_dict.string(samples[most_likely]["tgt_context"]))
+        src_context_log.append(
+            src_dict.string(samples[most_likely]["src_context"]) + " <eos>"
+        )
+        tgt_context_log.append(
+            "<eos> " + tgt_dict.string(samples[most_likely]["tgt_context"])
+        )
         tgt_log.append("<eos> " + tgt_dict.string(samples[most_likely]["target"]))
 
         bar.update(1)
@@ -292,17 +306,21 @@ def main():
 
     print("Saving info")
     with open("log.json", "w") as f:
-        for src, src_context, tgt, tgt_context, attention, correct in zip(src_log, src_context_log, tgt_log, tgt_context_log, attentions, corrects):
-            d = json.dumps({
-                "correct": correct.item(),
-                "source": src,
-                "source_context": src_context,
-                "target": tgt,
-                "target_context": tgt_context,
-                "attention": attention.tolist()
-            })
+        for src, src_context, tgt, tgt_context, attention, correct in zip(
+            src_log, src_context_log, tgt_log, tgt_context_log, attentions, corrects
+        ):
+            d = json.dumps(
+                {
+                    "correct": correct.item(),
+                    "source": src,
+                    "source_context": src_context,
+                    "target": tgt,
+                    "target_context": tgt_context,
+                    "attention": attention.tolist(),
+                }
+            )
             print(d, file=f)
-    
+
     if args.save_scores is not None:
         with open(args.save_scores, "w") as f:
             for score in all_scores:

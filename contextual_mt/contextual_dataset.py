@@ -5,7 +5,7 @@ import numpy as np
 
 from collections import defaultdict
 
-from fairseq.data import data_utils, FairseqDataset 
+from fairseq.data import data_utils, FairseqDataset
 
 
 def collate(samples, pad_id, eos_id, sort_by_src=False):
@@ -30,10 +30,7 @@ def collate(samples, pad_id, eos_id, sort_by_src=False):
     )
     # encode target and target context
     tgt_ctx_tokens = data_utils.collate_tokens(
-        [s["tgt_context"] for s in samples],
-        pad_id,
-        eos_id,
-        move_eos_to_beginning=True
+        [s["tgt_context"] for s in samples], pad_id, eos_id, move_eos_to_beginning=True
     )
     tgt_ctx_lengths = torch.LongTensor(
         [s["tgt_context"].ne(pad_id).long().sum() for s in samples]
@@ -78,9 +75,7 @@ def collate(samples, pad_id, eos_id, sort_by_src=False):
         )
         # encode target and target context
         tgt_ctx_tokens_out = data_utils.collate_tokens(
-            [s["tgt_context"] for s in samples],
-            pad_id,
-            eos_id
+            [s["tgt_context"] for s in samples], pad_id, eos_id
         )
 
         if sort_by_src:
@@ -128,12 +123,13 @@ class ContextualDataset(FairseqDataset):
             context
         pos_drop_probs: NOT USED
         src_pos_targ: NOT USED
-        sampled_context_size (bool): if set, context sizes will be sampled in 
+        sampled_context_size (bool): if set, context sizes will be sampled in
             a between 0 and `src/tgt_ctx_size` (default: False)
-        break_tag: token used to separate context sentences 
+        break_tag: token used to separate context sentences
         shuffle (bool, optional): shuffle dataset elements before batching
             (default: True).
-    """.
+    """
+
     def __init__(
         self,
         src,
@@ -188,8 +184,8 @@ class ContextualDataset(FairseqDataset):
 
         self.src_sizes = np.array(full_src_sizes)
         self.tgt_sizes = np.array(full_tgt_sizes)
-        
-        # NOTE: not used in the paper 
+
+        # NOTE: not used in the paper
         if pos_drop_probs is not None:
             self.pos_drop_probs = defaultdict(lambda: 0.0)
             for pos, p in pos_drop_probs.items():
@@ -208,9 +204,9 @@ class ContextualDataset(FairseqDataset):
         tgt_break_id = torch.tensor([self.tgt_dict.index(self.break_tag)])
         if self.src_ctx_size > 0:
             if self.sample_context_size:
-                src_context_size = np.random.randint(0, self.src_ctx_size+1)
+                src_context_size = np.random.randint(0, self.src_ctx_size + 1)
             else:
-                src_context_size = self.src_ctx_size 
+                src_context_size = self.src_ctx_size
 
             for i in range(1, src_context_size + 1):
                 # break if previous sample is from a different context (doc/chat)
@@ -224,7 +220,7 @@ class ContextualDataset(FairseqDataset):
 
         if self.tgt_ctx_size > 0:
             if self.sample_context_size:
-                tgt_context_size = np.random.randint(0, self.tgt_ctx_size+1)
+                tgt_context_size = np.random.randint(0, self.tgt_ctx_size + 1)
             else:
                 tgt_context_size = self.tgt_ctx_size
 
@@ -249,7 +245,7 @@ class ContextualDataset(FairseqDataset):
             "tgt_context": tgt_ctx_item,
             "target": tgt_item,
         }
-        
+
         if self.src_pos_tags is not None and self.pos_drop_probs is not None:
             probs = []
             for pos in self.src_pos_tags[index]:
@@ -295,11 +291,9 @@ class ContextualDataset(FairseqDataset):
         else:
             indices = np.arange(len(self), dtype=np.int64)
 
-        
         # sort by target length, then source length
         indices = indices[np.argsort(self.tgt_sizes[indices], kind="mergesort")]
         return indices[np.argsort(self.src_sizes[indices], kind="mergesort")]
-
 
     @property
     def supports_prefetch(self):

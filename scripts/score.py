@@ -68,12 +68,13 @@ def main():
         refs = [line.strip() for line in ref_f.readlines()]
 
     if args.speaker is not None:
-        assert args.speakers_file is not None, \
-            "speaker file needed when evaluating performance for particular speaker"
-        
+        assert (
+            args.speakers_file is not None
+        ), "speaker file needed when evaluating performance for particular speaker"
+
         with open(args.speakers_file, "r") as speakers_f:
             speakers = [line.strip() for line in speakers_f.readlines()]
-        
+
         new_refs = []
         for ref, spk in zip(refs, speakers):
             if spk == args.speaker:

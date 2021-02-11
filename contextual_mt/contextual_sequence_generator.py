@@ -163,7 +163,6 @@ class ContextualSequenceGenerator(SequenceGenerator):
                     decoder_context, reorder_state
                 )
 
-
             lprobs, avg_attn_scores = self.model.forward_decoder(
                 tokens[:, : step + 1],
                 decoder_context,
