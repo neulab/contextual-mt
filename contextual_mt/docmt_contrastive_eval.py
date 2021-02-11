@@ -17,8 +17,6 @@ from fairseq.data.language_pair_dataset import collate as raw_collate
 from contextual_mt.utils import create_context, encode
 
 
-
-
 def load_contrastive(
     source_file,
     target_file,

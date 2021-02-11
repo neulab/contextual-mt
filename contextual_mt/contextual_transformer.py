@@ -19,7 +19,6 @@ from fairseq.models.transformer import (
 )
 
 
-
 @register_model("contextual_transformer")
 class ContextualTransformerModel(TransformerModel):
     @staticmethod
