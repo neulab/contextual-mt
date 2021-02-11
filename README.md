@@ -1,11 +1,13 @@
 # Contextual  ML
 
-Implementations of context-aware models for document-level translation tasks, used in [Measuring and Incresing Context Usage in Context-Aware Machine Translation](FIXME)
+Implementations of context-aware models for document-level translation tasks, used in 
+
+1. [Measuring and Incresing Context Usage in Context-Aware Machine Translation](FIXME)
 
 Currently supports:
 
 * Training concatenation-based document-level machine translation models
-* Training CoWord dropout and dynamic context size
+* Training with CoWord dropout and dynamic context size
 * Measuring CXMI for models 
 
 
@@ -63,13 +65,17 @@ fairseq-preprocess \
 
 ### Document-level translation
 
-You can train using fairseq's training tool. Just select the `document_translation` task with the approriate context sizes
+You can train using fairseq's training tool. Just select the `document_translation` task with the approriate context sizes.
+
+For example, to train a model, with `N` source context size and `M` target context size, with dynamic sampling and CoWord dropout
 
 ```bash
 fairseq-train \
     ${bin_dir} --user-dir $REPO/contextual_mt \
     --task document_translation \
     --source-context-size $N --target-context-size $M \
+    --sample-context-size \
+    --coword-dropout 0.1 \
     --log-interval 10 \
     --arch contextual_transformer --share-decoder-input-output-embed  \
     --optimizer adam --adam-betas '(0.9, 0.98)' --clip-norm 0.1 \
@@ -109,13 +115,17 @@ python scripts/score.py ${predictions_dir}/test.pred.tgt ${data_dir}/test.tgt \
     --comet-path $COMET_DIR
 ```
 
+## Measuring CXMI
+
+To measure the CXMI for a model for different context sizes, please refer to the notebook `notebooks/measuring_context_usage.ipynb`
+
 ## Contrastive evaluation
 
-To run contrastive evaluation on ContraPro
+To run contrastive evaluation on ContraPro or Bawden's dataset
 
 ```bash
 python contextual_mt/docmt_contrastive_eval.py \
-    --source-lang en --target-lang de \
+    --source-lang src --target-lang tgt \
     --source-file $source_contr \
     --src-context-file $source_ctx_contr \
     --target-file $target_contr \
