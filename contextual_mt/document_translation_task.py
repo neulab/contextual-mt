@@ -32,7 +32,7 @@ class DocumentTranslationTask(TranslationTask):
         parser.add_argument(
             "--sample-context-size",
             default=False,
-            action='store_true',
+            action="store_true",
         )
         parser.add_argument(
             "--break-tag",
@@ -118,9 +118,10 @@ class DocumentTranslationTask(TranslationTask):
         pos_drop_probs = None
         if self.args.pos_drop_probs is not None:
             pos_drop_probs = {
-                p.split(":")[0]: float(p.split(":")[1]) for p in self.args.pos_drop_probs
+                p.split(":")[0]: float(p.split(":")[1])
+                for p in self.args.pos_drop_probs
             }
-        
+
         self.datasets[split] = ContextualDataset(
             src_dataset,
             src_dataset.sizes,
