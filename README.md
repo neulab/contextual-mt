@@ -13,7 +13,7 @@ Currently supports:
 
 ## Requirements 
 
-* [Fairseq](https://github.com/pytorch/fairseq) >= 0.10.2
+* [Fairseq](https://github.com/pytorch/fairseq) >= [add65ad](https://github.com/pytorch/fairseq/commit/add65adcc53a927f99a717d90a9672765237d937)
 * [SentencePiece](https://github.com/google/sentencepiece) >= 0.1.90
 * [COMET](https://github.com/Unbabel/COMET)
 * Python >= 3.6
