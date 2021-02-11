@@ -1,6 +1,5 @@
 import argparse
 import fasttext
-import tqdm
 from itertools import takewhile
 
 

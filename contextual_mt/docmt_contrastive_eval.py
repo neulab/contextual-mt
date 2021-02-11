@@ -294,7 +294,7 @@ def main():
     bar.close()
 
     if None not in label_corrects:
-        print(f"Pronoun accs...")
+        print("Pronoun accs...")
         for label, l_corrects in label_corrects.items():
             print(f" {label}: {torch.stack(l_corrects).float().mean().item()}")
     print(f"Total Acc: {torch.stack(corrects).float().mean().item()}")

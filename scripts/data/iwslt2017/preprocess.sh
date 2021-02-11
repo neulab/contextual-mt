@@ -2,25 +2,26 @@
 
 set -euo pipefail
 
-REPO=/home/pfernand/repos/dialogue-mt
+REPO=/home/pfernand/repos/contextual-mt
 
-url="https://wit3.fbk.eu/archive/2017-01-trnted/texts/de/en/de-en.tgz"
-data="/projects/tir1/corpora/dialogue_mt/iwslt2017/en-de"
+url="https://wit3.fbk.eu/archive/2017-01-trnted/texts/fr/en/en-fr.tgz"
+data="/projects/tir1/corpora/dialogue_mt/iwslt2017/en-fr"
 raw=$data/raw
 prep=$data/prep-pretrained
 bin=$data/bin-pretrained
 src_l="en"
-tgt_l="de"
-src_dict=/projects/tir1/corpora/dialogue_mt/paracrawl/en-de/bin/dict.$src_l.txt
-tgt_dict=/projects/tir1/corpora/dialogue_mt/paracrawl/en-de/bin/dict.$tgt_l.txt
-src_spm=/projects/tir1/corpora/dialogue_mt/paracrawl/en-de/prep/spm.model
-tgt_spm=/projects/tir1/corpora/dialogue_mt/paracrawl/en-de/prep/spm.model
-vocab_size=32000
+tgt_l="fr"
+src_dict="/projects/tir5/users/patrick/data/paracrawl/en-fr/bin/dict.$src_l.txt"
+tgt_dict="/projects/tir5/users/patrick/data/paracrawl/en-fr/bin/dict.$tgt_l.txt"
+src_spm="/projects/tir5/users/patrick/data/paracrawl/en-fr/prep/spm.model"
+tgt_spm="/projects/tir5/users/patrick/data/paracrawl/en-fr/prep/spm.model"
+vocab_size=20000
 joint_vocab=false
 
 mkdir -p $raw $prep $bin
 
 archive=$raw/${url##*/}
+echo $archive
 if [ -f "$archive" ]; then
     echo "$archive already exists, skipping download and extraction..."
 else

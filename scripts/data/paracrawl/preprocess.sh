@@ -2,11 +2,11 @@
 #
 # downloads, extracts, preprocess and binarizes paracrawl
 # warning do not run in head node, use with 
-# `--mem=64000 --cpus-per-task=10 --time=0`
+# `--mem=64000 -c 10 --time=0`
 
 set -eu
 
-REPO=/home/pfernand/repos/dialogue-mt
+REPO=/home/pfernand/repos/contextual-mt
 
 SCRIPTS=~/repos/mosesdecoder/scripts
 TOKENIZER=$SCRIPTS/tokenizer/tokenizer.perl
@@ -17,14 +17,14 @@ THREADS=10
 VALID_SIZE=2000
 TEST_SIZE=2000
 
-url="https://s3.amazonaws.com/web-language-models/paracrawl/release7.1/en-de.txt.gz"
-data="/projects/tir1/corpora/dialogue_mt/paracrawl/en-de"
+url="https://s3.amazonaws.com/web-language-models/paracrawl/release7.1/en-fr.txt.gz"
+data="/projects/tir5/users/patrick/data/paracrawl/en-fr"
 raw=$data/raw
 tmp=$data/tmp
 prep=$data/prep
 bin=$data/bin
 src_lang="en"
-tgt_lang="de"
+tgt_lang="fr"
 vocab_size=32000
 vocab_sample_size=20000000
 
@@ -46,25 +46,25 @@ mkdir -p $raw $prep $bin $tmp
 #     gunzip $archive
 # fi
 #  
-# # echo "splitting data..."
-# # total_size=`wc -l $data_file | cut -f1 -d ' '`
-# # eval_size=$(( $VALID_SIZE + $TEST_SIZE ))
-# # train_size=$(( $total_size - $eval_size ))
-# # shuf $data_file > $tmp/data.rd.txt
-# # head -$train_size $tmp/data.rd.txt > $tmp/train.txt
-# # tail -$eval_size $tmp/data.rd.txt | head -$VALID_SIZE > $tmp/valid.txt
-# # tail -$eval_size $tmp/data.rd.txt | tail -$TEST_SIZE > $tmp/test.txt
-# # for split in train valid test; do
-# #     cat $tmp/$split.txt | cut -f1 > $tmp/${split}.${src_lang}
-# #     cat $tmp/$split.txt | cut -f2 > $tmp/${split}.${tgt_lang}
-# # done
-# # 
-# # echo "cleaning data..."
-# # for split in train valid test; do
-# #     python $REPO/scripts/data/paracrawl/clean_corpus.py $tmp/$split $tmp/$split.cln \
-# #             --source-lang $src_lang --target-lang $tgt_lang \
-# #             --fasttext-model $FASTTEXT_MODEL
-# # done
+# echo "splitting data..."
+# total_size=`wc -l $data_file | cut -f1 -d ' '`
+# eval_size=$(( $VALID_SIZE + $TEST_SIZE ))
+# train_size=$(( $total_size - $eval_size ))
+# shuf $data_file > $tmp/data.rd.txt
+# head -$train_size $tmp/data.rd.txt > $tmp/train.txt
+# tail -$eval_size $tmp/data.rd.txt | head -$VALID_SIZE > $tmp/valid.txt
+# tail -$eval_size $tmp/data.rd.txt | tail -$TEST_SIZE > $tmp/test.txt
+# for split in train valid test; do
+#     cat $tmp/$split.txt | cut -f1 > $tmp/${split}.${src_lang}
+#     cat $tmp/$split.txt | cut -f2 > $tmp/${split}.${tgt_lang}
+# done
+# 
+# echo "cleaning data..."
+# for split in train valid test; do
+#     python $REPO/scripts/data/paracrawl/clean_corpus.py $tmp/$split $tmp/$split.cln \
+#             --source-lang $src_lang --target-lang $tgt_lang \
+#             --fasttext-model $FASTTEXT_MODEL
+# done
 # 
 # echo "learning sentecepiece model..."
 # cat $tmp/train.cln.${src_lang} $tmp/train.cln.${tgt_lang} > $tmp/train.cln.full

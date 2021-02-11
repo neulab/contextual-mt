@@ -132,7 +132,7 @@ class ContextualTransformerEncoder(TransformerEncoder):
         return_all_hiddens: bool = False,
     ):
         # if source dropout enabled, randomly drop tokens from input
-        if self.training and self.coword_dropout_type != None:
+        if self.training and self.coword_dropout_type is not None:
             if self.coword_dropout_type == "sample":
                 padding_mask = src_tokens.eq(self.padding_idx)
                 mask_token = torch.tensor(self.mask_id).to(src_tokens)
