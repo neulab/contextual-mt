@@ -11,6 +11,5 @@ setuptools.setup(
     classifiers=[
         "Programming Language :: Python :: 3",
     ],
-    entry_points={},
     python_requires=">=3.6",
 )
