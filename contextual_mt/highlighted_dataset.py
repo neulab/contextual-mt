@@ -13,18 +13,24 @@ def collate(samples, pad_id, eos_id, sort_by_src=False):
         pad_id,
         eos_id,
     )
-    src_lengths = torch.LongTensor([s["source"].ne(pad_id).long().sum() for s in samples])
+    src_lengths = torch.LongTensor(
+        [s["source"].ne(pad_id).long().sum() for s in samples]
+    )
     src_ctx_tokens = data_utils.collate_tokens(
         [s["src_context"] for s in samples],
         pad_id,
         eos_id,
     )
-    src_ctx_lengths = torch.LongTensor([s["src_context"].ne(pad_id).long().sum() for s in samples])
+    src_ctx_lengths = torch.LongTensor(
+        [s["src_context"].ne(pad_id).long().sum() for s in samples]
+    )
     # encode target and target context
     tgt_ctx_tokens = data_utils.collate_tokens(
         [s["tgt_context"] for s in samples], pad_id, eos_id, move_eos_to_beginning=True
     )
-    tgt_ctx_lengths = torch.LongTensor([s["tgt_context"].ne(pad_id).long().sum() for s in samples])
+    tgt_ctx_lengths = torch.LongTensor(
+        [s["tgt_context"].ne(pad_id).long().sum() for s in samples]
+    )
     if sort_by_src:
         src_lengths, sort_order = src_lengths.sort(descending=True)
         id = id.index_select(0, sort_order)
@@ -98,7 +104,9 @@ def collate(samples, pad_id, eos_id, sort_by_src=False):
             pad_id,
             eos_id,
         )
-        tgt_lengths = torch.LongTensor([s["target"].ne(pad_id).long().sum() for s in samples])
+        tgt_lengths = torch.LongTensor(
+            [s["target"].ne(pad_id).long().sum() for s in samples]
+        )
 
         prev_output_tokens = data_utils.collate_tokens(
             [s["target"] for s in samples],
@@ -107,7 +115,9 @@ def collate(samples, pad_id, eos_id, sort_by_src=False):
             move_eos_to_beginning=True,
         )
         # encode target and target context
-        tgt_ctx_tokens_out = data_utils.collate_tokens([s["tgt_context"] for s in samples], pad_id, eos_id)
+        tgt_ctx_tokens_out = data_utils.collate_tokens(
+            [s["tgt_context"] for s in samples], pad_id, eos_id
+        )
 
         if sort_by_src:
             prev_output_tokens = prev_output_tokens.index_select(0, sort_order)
@@ -247,7 +257,9 @@ class HighlightedDataset(FairseqDataset):
         assert src_dict.eos() == tgt_dict.eos()
         assert src_dict.unk() == tgt_dict.unk()
 
-        assert len(src) == len(tgt), "Source and target must contain the same number of examples"
+        assert len(src) == len(
+            tgt
+        ), "Source and target must contain the same number of examples"
 
         self.src_dict = src_dict
         self.tgt_dict = tgt_dict
@@ -263,10 +275,18 @@ class HighlightedDataset(FairseqDataset):
         tgt_hoff_id = self.tgt_dict.index(self.hoff_tag)
 
         self.src, self.h_src, self.src_words_idx = extract_highlights(
-            src, src_hon_id, src_hoff_id, self.src_dict.index(p_tag), self.src_dict.index(p2_tag)
+            src,
+            src_hon_id,
+            src_hoff_id,
+            self.src_dict.index(p_tag),
+            self.src_dict.index(p2_tag),
         )
         self.tgt, self.h_tgt, self.tgt_words_idx = extract_highlights(
-            tgt, tgt_hon_id, tgt_hoff_id, self.tgt_dict.index(p_tag), self.tgt_dict.index(p2_tag)
+            tgt,
+            tgt_hon_id,
+            tgt_hoff_id,
+            self.tgt_dict.index(p_tag),
+            self.tgt_dict.index(p2_tag),
         )
         self.c_src, self.h_c_src = extract_highlights(ctx_src, src_hon_id, src_hoff_id)
         self.c_tgt, self.h_c_tgt = extract_highlights(ctx_tgt, tgt_hon_id, tgt_hoff_id)
@@ -392,7 +412,13 @@ class HighlightedDataset(FairseqDataset):
         else:
             max_src_size, max_tgt_size = max_sizes
 
-        ignored = indices[(self.src_sizes[indices] > max_src_size) | (self.tgt_sizes[indices] > max_tgt_size)]
+        ignored = indices[
+            (self.src_sizes[indices] > max_src_size)
+            | (self.tgt_sizes[indices] > max_tgt_size)
+        ]
         if len(ignored) > 0:
-            indices = indices[(self.src_sizes[indices] <= max_src_size) & (self.tgt_sizes[indices] <= max_tgt_size)]
+            indices = indices[
+                (self.src_sizes[indices] <= max_src_size)
+                & (self.tgt_sizes[indices] <= max_tgt_size)
+            ]
         return indices, ignored.tolist()

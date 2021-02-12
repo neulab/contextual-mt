@@ -173,7 +173,9 @@ class AttnRegTransformerEncoder(TransformerEncoder):
             "encoder_padding_mask": [padding_mask],  # B x T
             "encoder_embedding": [encoder_embedding],  # B x T x C
             "encoder_states": x_encoder_states,  # List[T x B x C]
-            "enc_self_attn": torch.stack(self_attention) if len(self_attention) > 0 else torch.empty(0),
+            "enc_self_attn": torch.stack(self_attention)
+            if len(self_attention) > 0
+            else torch.empty(0),
             "src_tokens": torch.empty(0),  # B x T
             "src_lengths": torch.empty(0),  # B x 1
         }
@@ -237,7 +239,9 @@ class TransformerEncoderLayerReturnSelfAttention(TransformerEncoderLayer):
 
 
 class AttnRegTransformerDecoder(TransformerDecoder):
-    def __init__(self, args, dictionary, embed_tokens, no_encoder_attn=False, context_loss=False):
+    def __init__(
+        self, args, dictionary, embed_tokens, no_encoder_attn=False, context_loss=False
+    ):
         super().__init__(args, dictionary, embed_tokens, no_encoder_attn)
         self.context_loss = context_loss
 
@@ -363,7 +367,9 @@ class AttnRegTransformerDecoder(TransformerDecoder):
 
         # embed positions
         if self.embed_positions is not None:
-            positions = self.embed_positions(input_tokens, incremental_state=incremental_state)
+            positions = self.embed_positions(
+                input_tokens, incremental_state=incremental_state
+            )
         else:
             positions = None
 
@@ -405,7 +411,9 @@ class AttnRegTransformerDecoder(TransformerDecoder):
         # decoder layers
         inner_states: List[Optional[Tensor]] = [x]
         for idx, layer in enumerate(self.layers):
-            if (incremental_state is None or len(incremental_state) == 0) and not full_context_alignment:
+            if (
+                incremental_state is None or len(incremental_state) == 0
+            ) and not full_context_alignment:
                 self_attn_mask = self.buffered_future_mask(x)
             else:
                 self_attn_mask = None
@@ -415,7 +423,10 @@ class AttnRegTransformerDecoder(TransformerDecoder):
                 if (encoder_out is not None and len(encoder_out["encoder_out"]) > 0)
                 else None,
                 encoder_out["encoder_padding_mask"][0]
-                if (encoder_out is not None and len(encoder_out["encoder_padding_mask"]) > 0)
+                if (
+                    encoder_out is not None
+                    and len(encoder_out["encoder_padding_mask"]) > 0
+                )
                 else None,
                 incremental_state,
                 self_attn_mask=self_attn_mask,
@@ -466,7 +477,9 @@ class AttnRegTransformerDecoder(TransformerDecoder):
 
 
 class TransformerDecoderLayerReturnSelfAttention(TransformerDecoderLayer):
-    def __init__(self, args, no_encoder_attn=False, add_bias_kv=False, add_zero_attn=False):
+    def __init__(
+        self, args, no_encoder_attn=False, add_bias_kv=False, add_zero_attn=False
+    ):
         super().__init__(args, no_encoder_attn, add_bias_kv, add_zero_attn)
 
     def residual_connection(self, x, residual):
@@ -519,12 +532,18 @@ class TransformerDecoderLayerReturnSelfAttention(TransformerDecoderLayer):
         ):
             if self_attn_mask is not None:
                 assert encoder_out is not None
-                self_attn_mask = torch.cat((x.new_zeros(x.size(0), encoder_out.size(0)), self_attn_mask), dim=1)
+                self_attn_mask = torch.cat(
+                    (x.new_zeros(x.size(0), encoder_out.size(0)), self_attn_mask), dim=1
+                )
             if self_attn_padding_mask is not None:
                 if encoder_padding_mask is None:
                     assert encoder_out is not None
-                    encoder_padding_mask = self_attn_padding_mask.new_zeros(encoder_out.size(1), encoder_out.size(0))
-                self_attn_padding_mask = torch.cat((encoder_padding_mask, self_attn_padding_mask), dim=1)
+                    encoder_padding_mask = self_attn_padding_mask.new_zeros(
+                        encoder_out.size(1), encoder_out.size(0)
+                    )
+                self_attn_padding_mask = torch.cat(
+                    (encoder_padding_mask, self_attn_padding_mask), dim=1
+                )
             assert encoder_out is not None
             y = torch.cat((encoder_out, x), dim=0)
         else:

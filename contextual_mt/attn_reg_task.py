@@ -29,10 +29,18 @@ class AttentionRegularizationTask(DocumentTranslationTask):
             help="specify which attention to regularize",
         )
         parser.add_argument(
-            "--enc-alignment-layer", default=[0], nargs="+", type=int, help="specify which encoder layer to regularize"
+            "--enc-alignment-layer",
+            default=[0],
+            nargs="+",
+            type=int,
+            help="specify which encoder layer to regularize",
         )
         parser.add_argument(
-            "--dec-alignment-layer", default=[5], nargs="+", type=int, help="specify which decoder layer to regularize"
+            "--dec-alignment-layer",
+            default=[5],
+            nargs="+",
+            type=int,
+            help="specify which decoder layer to regularize",
         )
         parser.add_argument(
             "--self-alignment-layer",
@@ -72,7 +80,9 @@ class AttentionRegularizationTask(DocumentTranslationTask):
         """
 
         def split_exists(split, src, tgt, lang, data_path):
-            filename = os.path.join(data_path, "{}.{}-{}.{}".format(split, src, tgt, lang))
+            filename = os.path.join(
+                data_path, "{}.{}-{}.{}".format(split, src, tgt, lang)
+            )
             return indexed_dataset.dataset_exists(filename, impl=self.args.dataset_impl)
 
         paths = utils.split_paths(self.args.data)
@@ -90,10 +100,16 @@ class AttentionRegularizationTask(DocumentTranslationTask):
         elif split_exists(split, tgt, src, src, data_path):
             prefix = os.path.join(data_path, "{}.{}-{}.".format(split, tgt, src))
         else:
-            raise FileNotFoundError("Dataset not found: {} ({})".format(split, data_path))
+            raise FileNotFoundError(
+                "Dataset not found: {} ({})".format(split, data_path)
+            )
 
-        src_dataset = data_utils.load_indexed_dataset(prefix + src, self.src_dict, self.args.dataset_impl)
-        tgt_dataset = data_utils.load_indexed_dataset(prefix + tgt, self.tgt_dict, self.args.dataset_impl)
+        src_dataset = data_utils.load_indexed_dataset(
+            prefix + src, self.src_dict, self.args.dataset_impl
+        )
+        tgt_dataset = data_utils.load_indexed_dataset(
+            prefix + tgt, self.tgt_dict, self.args.dataset_impl
+        )
         with open(prefix + "docids", "r") as f:
             doc_ids = [idx for idx in f]  # allow string
 
@@ -103,7 +119,10 @@ class AttentionRegularizationTask(DocumentTranslationTask):
                 pos_tags = [line.strip().split(" ") for line in f]
         pos_drop_probs = None
         if self.args.pos_drop_probs is not None:
-            pos_drop_probs = {p.split(":")[0]: float(p.split(":")[1]) for p in self.args.pos_drop_probs}
+            pos_drop_probs = {
+                p.split(":")[0]: float(p.split(":")[1])
+                for p in self.args.pos_drop_probs
+            }
 
         main_data = ContextualDataset(
             src_dataset,
@@ -125,26 +144,46 @@ class AttentionRegularizationTask(DocumentTranslationTask):
             # Load highlighted data
             split_path = f"highlighted.{split}"
             if split_exists(split_path, src, tgt, src, data_path):
-                prefix = os.path.join(data_path, "{}.{}-{}.".format(split_path, src, tgt))
+                prefix = os.path.join(
+                    data_path, "{}.{}-{}.".format(split_path, src, tgt)
+                )
             elif split_exists(split_path, tgt, src, src, data_path):
-                prefix = os.path.join(data_path, "{}.{}-{}.".format(split_path, tgt, src))
+                prefix = os.path.join(
+                    data_path, "{}.{}-{}.".format(split_path, tgt, src)
+                )
             else:
-                raise FileNotFoundError("Dataset not found: {} ({})".format(split_path, data_path))
+                raise FileNotFoundError(
+                    "Dataset not found: {} ({})".format(split_path, data_path)
+                )
 
-            h_src_dataset = data_utils.load_indexed_dataset(prefix + src, self.src_dict, self.args.dataset_impl)
+            h_src_dataset = data_utils.load_indexed_dataset(
+                prefix + src, self.src_dict, self.args.dataset_impl
+            )
 
-            h_tgt_dataset = data_utils.load_indexed_dataset(prefix + tgt, self.tgt_dict, self.args.dataset_impl)
+            h_tgt_dataset = data_utils.load_indexed_dataset(
+                prefix + tgt, self.tgt_dict, self.args.dataset_impl
+            )
 
             split_path = f"highlighted.{split}.context"
 
             if split_exists(split_path, src, tgt, src, data_path):
-                prefix = os.path.join(data_path, "{}.{}-{}.".format(split_path, src, tgt))
+                prefix = os.path.join(
+                    data_path, "{}.{}-{}.".format(split_path, src, tgt)
+                )
             elif split_exists("highlighted.context", tgt, src, src, data_path):
-                prefix = os.path.join(data_path, "{}.{}-{}.".format(split_path, tgt, src))
+                prefix = os.path.join(
+                    data_path, "{}.{}-{}.".format(split_path, tgt, src)
+                )
             else:
-                raise FileNotFoundError("Dataset not found: {} ({})".format(split_path, data_path))
-            h_src_ctx_dataset = data_utils.load_indexed_dataset(prefix + src, self.src_dict, self.args.dataset_impl)
-            h_tgt_ctx_dataset = data_utils.load_indexed_dataset(prefix + tgt, self.tgt_dict, self.args.dataset_impl)
+                raise FileNotFoundError(
+                    "Dataset not found: {} ({})".format(split_path, data_path)
+                )
+            h_src_ctx_dataset = data_utils.load_indexed_dataset(
+                prefix + src, self.src_dict, self.args.dataset_impl
+            )
+            h_tgt_ctx_dataset = data_utils.load_indexed_dataset(
+                prefix + tgt, self.tgt_dict, self.args.dataset_impl
+            )
 
             contra = True if split == "test" else False
 
@@ -175,7 +214,8 @@ class AttentionRegularizationTask(DocumentTranslationTask):
                     return x[0]
 
             self.datasets[split] = MultiCorpusSampledDataset(
-                OrderedDict({"highlighted": highlighted_data, "main": main_data}), sampler
+                OrderedDict({"highlighted": highlighted_data, "main": main_data}),
+                sampler,
             )
 
         else:
@@ -188,7 +228,9 @@ class AttentionRegularizationTask(DocumentTranslationTask):
         """
 
         def split_exists(split, src, tgt, lang, data_path):
-            filename = os.path.join(data_path, "{}.{}-{}.{}".format(split, src, tgt, lang))
+            filename = os.path.join(
+                data_path, "{}.{}-{}.{}".format(split, src, tgt, lang)
+            )
             return indexed_dataset.dataset_exists(filename, impl=self.args.dataset_impl)
 
         paths = utils.split_paths(self.args.data)
@@ -201,23 +243,43 @@ class AttentionRegularizationTask(DocumentTranslationTask):
 
         # Load highlighted data
         if split_exists("highlighted", src, tgt, src, data_path):
-            prefix = os.path.join(data_path, "{}.{}-{}.".format("highlighted", src, tgt))
+            prefix = os.path.join(
+                data_path, "{}.{}-{}.".format("highlighted", src, tgt)
+            )
         elif split_exists("highlighted", tgt, src, src, data_path):
-            prefix = os.path.join(data_path, "{}.{}-{}.".format("highlighted", tgt, src))
+            prefix = os.path.join(
+                data_path, "{}.{}-{}.".format("highlighted", tgt, src)
+            )
         else:
-            raise FileNotFoundError("Dataset not found: {} ({})".format("highlighted", data_path))
+            raise FileNotFoundError(
+                "Dataset not found: {} ({})".format("highlighted", data_path)
+            )
 
-        h_src_dataset = data_utils.load_indexed_dataset(prefix + src, self.src_dict, self.args.dataset_impl)
-        h_tgt_dataset = data_utils.load_indexed_dataset(prefix + tgt, self.tgt_dict, self.args.dataset_impl)
+        h_src_dataset = data_utils.load_indexed_dataset(
+            prefix + src, self.src_dict, self.args.dataset_impl
+        )
+        h_tgt_dataset = data_utils.load_indexed_dataset(
+            prefix + tgt, self.tgt_dict, self.args.dataset_impl
+        )
 
         if split_exists("highlighted.context", src, tgt, src, data_path):
-            prefix = os.path.join(data_path, "{}.{}-{}.".format("highlighted.context", src, tgt))
+            prefix = os.path.join(
+                data_path, "{}.{}-{}.".format("highlighted.context", src, tgt)
+            )
         elif split_exists("highlighted.context", tgt, src, src, data_path):
-            prefix = os.path.join(data_path, "{}.{}-{}.".format("highlighted.context", tgt, src))
+            prefix = os.path.join(
+                data_path, "{}.{}-{}.".format("highlighted.context", tgt, src)
+            )
         else:
-            raise FileNotFoundError("Dataset not found: {} ({})".format("highlighted.context", data_path))
-        h_src_ctx_dataset = data_utils.load_indexed_dataset(prefix + src, self.src_dict, self.args.dataset_impl)
-        h_tgt_ctx_dataset = data_utils.load_indexed_dataset(prefix + tgt, self.tgt_dict, self.args.dataset_impl)
+            raise FileNotFoundError(
+                "Dataset not found: {} ({})".format("highlighted.context", data_path)
+            )
+        h_src_ctx_dataset = data_utils.load_indexed_dataset(
+            prefix + src, self.src_dict, self.args.dataset_impl
+        )
+        h_tgt_ctx_dataset = data_utils.load_indexed_dataset(
+            prefix + tgt, self.tgt_dict, self.args.dataset_impl
+        )
 
         self.datasets["highlighted"] = HighlightedDataset(
             h_src_dataset,

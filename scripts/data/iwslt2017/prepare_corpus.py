@@ -56,7 +56,9 @@ if __name__ == "__main__":
     parser.add_argument("out_data")
     parser.add_argument("-s", "--source-lang", required=True, type=str)
     parser.add_argument("-t", "--target-lang", required=True, type=str)
-    parser.add_argument("--devsets", nargs="*", default=["tst2011", "tst2012", "tst2013", "tst2014"])
+    parser.add_argument(
+        "--devsets", nargs="*", default=["tst2011", "tst2012", "tst2013", "tst2014"]
+    )
     parser.add_argument("--testsets", nargs="*", default=["tst2015"])
     args = parser.parse_args()
 
@@ -72,7 +74,9 @@ if __name__ == "__main__":
     )
 
     train_inp_prefix = os.path.join(args.raw_data, f"train.tags.{first_l}-{second_l}")
-    train_out_prefix = os.path.join(args.out_data, f"train.{args.source_lang}-{args.target_lang}")
+    train_out_prefix = os.path.join(
+        args.out_data, f"train.{args.source_lang}-{args.target_lang}"
+    )
     extract_train(
         f"{train_inp_prefix}.{args.source_lang}",
         f"{train_out_prefix}.{args.source_lang}",
@@ -84,9 +88,13 @@ if __name__ == "__main__":
     )
 
     # generate valid set based on devsets paseed
-    valid_out_prefix = os.path.join(args.out_data, f"valid.{args.source_lang}-{args.target_lang}")
+    valid_out_prefix = os.path.join(
+        args.out_data, f"valid.{args.source_lang}-{args.target_lang}"
+    )
     for devset in args.devsets:
-        valid_inp_prefix = os.path.join(args.raw_data, f"IWSLT17.TED.{devset}.{first_l}-{second_l}")
+        valid_inp_prefix = os.path.join(
+            args.raw_data, f"IWSLT17.TED.{devset}.{first_l}-{second_l}"
+        )
         extract_eval(
             f"{valid_inp_prefix}.{args.source_lang}.xml",
             f"{valid_out_prefix}.{args.source_lang}",
@@ -98,9 +106,13 @@ if __name__ == "__main__":
         )
 
     # generate test set based on testsets paseed
-    test_out_prefix = os.path.join(args.out_data, f"test.{args.source_lang}-{args.target_lang}")
+    test_out_prefix = os.path.join(
+        args.out_data, f"test.{args.source_lang}-{args.target_lang}"
+    )
     for testset in args.testsets:
-        test_inp_prefix = os.path.join(args.raw_data, f"IWSLT17.TED.{testset}.{first_l}-{second_l}")
+        test_inp_prefix = os.path.join(
+            args.raw_data, f"IWSLT17.TED.{testset}.{first_l}-{second_l}"
+        )
         extract_eval(
             f"{test_inp_prefix}.{args.source_lang}.xml",
             f"{test_out_prefix}.{args.source_lang}",

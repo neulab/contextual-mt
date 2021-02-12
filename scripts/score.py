@@ -6,7 +6,9 @@ import sacrebleu
 from comet.models import download_model
 
 
-def make_n_sentence_corpus(full_corpus, docids, context_size, n_sentence, break_tag="<brk>"):
+def make_n_sentence_corpus(
+    full_corpus, docids, context_size, n_sentence, break_tag="<brk>"
+):
     corpus = []
     prev_docid = -1
     docs_sizes = Counter(docids)
@@ -66,7 +68,9 @@ def main():
         refs = [line.strip() for line in ref_f.readlines()]
 
     if args.speaker is not None:
-        assert args.speakers_file is not None, "speaker file needed when evaluating performance for particular speaker"
+        assert (
+            args.speakers_file is not None
+        ), "speaker file needed when evaluating performance for particular speaker"
 
         with open(args.speakers_file, "r") as speakers_f:
             speakers = [line.strip() for line in speakers_f.readlines()]
@@ -93,7 +97,9 @@ def main():
     print(sacrebleu.corpus_bleu(hyps, [refs]).format())
 
     if args.comet_model is not None:
-        assert args.comet_path is not None, "need to provide a path to download/load comet"
+        assert (
+            args.comet_path is not None
+        ), "need to provide a path to download/load comet"
 
         assert args.src is not None, "source needs to be provided to use COMET"
         with open(args.src) as src_f:
@@ -102,8 +108,12 @@ def main():
         # download comet and load
         comet_model = download_model(args.comet_model, args.comet_path)
         print("running comet evaluation....")
-        comet_input = [{"src": src, "mt": mt, "ref": ref} for src, mt, ref in zip(srcs, hyps, refs)]
-        _, comet_scores = comet_model.predict(comet_input, cuda=torch.cuda.is_available(), show_progress=True)
+        comet_input = [
+            {"src": src, "mt": mt, "ref": ref} for src, mt, ref in zip(srcs, hyps, refs)
+        ]
+        _, comet_scores = comet_model.predict(
+            comet_input, cuda=torch.cuda.is_available(), show_progress=True
+        )
         print(f"COMET = {sum(comet_scores)/len(comet_scores):.4f}")
 
 

@@ -96,40 +96,66 @@ class AttentionLoss(FairseqCriterion):
         if "highlights" in sample:
 
             src_highlights = torch.cat(
-                [sample["highlights"]["src_ctx_highlights"], sample["highlights"]["source_highlights"]], axis=1
+                [
+                    sample["highlights"]["src_ctx_highlights"],
+                    sample["highlights"]["source_highlights"],
+                ],
+                axis=1,
             )
             tgt_highlights = torch.cat(
-                [sample["highlights"]["tgt_ctx_highlights"], sample["highlights"]["target_highlights"]], axis=1
+                [
+                    sample["highlights"]["tgt_ctx_highlights"],
+                    sample["highlights"]["target_highlights"],
+                ],
+                axis=1,
             )
             src_words = torch.cat(
-                [torch.zeros_like(sample["highlights"]["src_ctx_highlights"]), sample["highlights"]["src_words"]],
+                [
+                    torch.zeros_like(sample["highlights"]["src_ctx_highlights"]),
+                    sample["highlights"]["src_words"],
+                ],
                 axis=1,
             )
             tgt_words = torch.cat(
-                [torch.zeros_like(sample["highlights"]["tgt_ctx_highlights"]), sample["highlights"]["tgt_words"]],
+                [
+                    torch.zeros_like(sample["highlights"]["tgt_ctx_highlights"]),
+                    sample["highlights"]["tgt_words"],
+                ],
                 axis=1,
             )
 
-            cross_attn = output_features["attn"][0]  # batchsize x tgt_seq_len (query) x src_seq_len (value)
-            self_attn = output_features["attn"][1]  # batchsize x tgt_seq_len (query) x tgt_seq_len (value)
+            cross_attn = output_features["attn"][
+                0
+            ]  # batchsize x tgt_seq_len (query) x src_seq_len (value)
+            self_attn = output_features["attn"][
+                1
+            ]  # batchsize x tgt_seq_len (query) x tgt_seq_len (value)
             enc_self_attn = output_features["encoder_out"][
                 "enc_self_attn"
             ]  # num_layers x num_heads x batchsize x src_seq_len (query) x src_seq_len (value)
 
             if self.regularize_heads < 0:
                 src_highlights = src_highlights.add(src_words)
-                src_highlights = torch.where(src_highlights > 0, torch.tensor(1).cuda(), torch.tensor(0).cuda())
+                src_highlights = torch.where(
+                    src_highlights > 0, torch.tensor(1).cuda(), torch.tensor(0).cuda()
+                )
                 tgt_highlights = tgt_highlights.add(tgt_words)
-                tgt_highlights = torch.where(tgt_highlights > 0, torch.tensor(1).cuda(), torch.tensor(0).cuda())
+                tgt_highlights = torch.where(
+                    tgt_highlights > 0, torch.tensor(1).cuda(), torch.tensor(0).cuda()
+                )
 
             # normalize the highlights
             updated_tags = src_highlights + 1e-9
             normalizing_const = torch.sum(updated_tags, dim=1)
-            src_normalized_tags = torch.einsum("ij,i->ij", updated_tags, 1.0 / normalizing_const)
+            src_normalized_tags = torch.einsum(
+                "ij,i->ij", updated_tags, 1.0 / normalizing_const
+            )
 
             updated_tags = tgt_highlights + 1e-9
             normalizing_const = torch.sum(updated_tags, dim=1)
-            tgt_normalized_tags = torch.einsum("ij,i->ij", updated_tags, 1.0 / normalizing_const)
+            tgt_normalized_tags = torch.einsum(
+                "ij,i->ij", updated_tags, 1.0 / normalizing_const
+            )
 
             kld_loss = nn.KLDivLoss(reduction="sum")
 
@@ -147,11 +173,16 @@ class AttentionLoss(FairseqCriterion):
                                 else:
                                     self_a = self_a.mean(dim=0)
                             self_attn_loss += kld_loss(
-                                F.log_softmax(self_a[batch_id, i], -1), tgt_normalized_tags[batch_id]
+                                F.log_softmax(self_a[batch_id, i], -1),
+                                tgt_normalized_tags[batch_id],
                             )
 
                         self_attn_mean.append(
-                            torch.sum(torch.mul(self_a[batch_id, i], tgt_normalized_tags[batch_id]))
+                            torch.sum(
+                                torch.mul(
+                                    self_a[batch_id, i], tgt_normalized_tags[batch_id]
+                                )
+                            )
                             / torch.sum(tgt_normalized_tags[batch_id])
                         )
                     if "cross" in self.reg_attn:
@@ -162,11 +193,17 @@ class AttentionLoss(FairseqCriterion):
                                 else:
                                     cross_a = cross_a.mean(dim=0)
                             cross_attn_loss += kld_loss(
-                                F.log_softmax(cross_a[batch_id, i], -1), src_normalized_tags[batch_id]
+                                F.log_softmax(cross_a[batch_id, i], -1),
+                                src_normalized_tags[batch_id],
                             )
 
                             cross_attn_mean.append(
-                                torch.sum(torch.mul(cross_a[batch_id, i], src_normalized_tags[batch_id]))
+                                torch.sum(
+                                    torch.mul(
+                                        cross_a[batch_id, i],
+                                        src_normalized_tags[batch_id],
+                                    )
+                                )
                                 / torch.sum(src_normalized_tags[batch_id])
                             )
 
@@ -180,11 +217,17 @@ class AttentionLoss(FairseqCriterion):
                                 else:
                                     enc_a = enc_a.mean(dim=0)
                             enc_attn_loss += kld_loss(
-                                F.log_softmax(enc_a[batch_id, i], -1), src_normalized_tags[batch_id]
+                                F.log_softmax(enc_a[batch_id, i], -1),
+                                src_normalized_tags[batch_id],
                             )
 
                             enc_attn_mean.append(
-                                torch.sum(torch.mul(enc_a[batch_id, i], src_normalized_tags[batch_id]))
+                                torch.sum(
+                                    torch.mul(
+                                        enc_a[batch_id, i],
+                                        src_normalized_tags[batch_id],
+                                    )
+                                )
                                 / torch.sum(src_normalized_tags[batch_id])
                             )
 
@@ -195,7 +238,9 @@ class AttentionLoss(FairseqCriterion):
             if len(enc_attn_mean) > 0:
                 enc_attn_mean = sum(enc_attn_mean) / len(enc_attn_mean)
 
-        sample_size = sample["target"].size(0) if self.sentence_avg else sample["ntokens"]
+        sample_size = (
+            sample["target"].size(0) if self.sentence_avg else sample["ntokens"]
+        )
         logging_output = {
             "loss": loss.data,
             "nll_loss": nll_loss.data,
@@ -258,7 +303,9 @@ class AttentionLoss(FairseqCriterion):
     def compute_accuracy(self, model, net_output, sample):
         lprobs, target = self.get_lprobs_and_target(model, net_output, sample)
         mask = target.ne(self.padding_idx)
-        n_correct = torch.sum(lprobs.argmax(1).masked_select(mask).eq(target.masked_select(mask)))
+        n_correct = torch.sum(
+            lprobs.argmax(1).masked_select(mask).eq(target.masked_select(mask))
+        )
         total = torch.sum(mask)
         return n_correct, total
 
@@ -268,8 +315,12 @@ class AttentionLoss(FairseqCriterion):
         loss_sum = sum(log.get("loss", 0) for log in logging_outputs)
         nll_loss_sum = sum(log.get("nll_loss", 0) for log in logging_outputs)
         attn_loss_sum = sum(log.get("attn_loss", 0) for log in logging_outputs)
-        cross_attn_loss_sum = sum(log.get("cross_attn_loss", 0) for log in logging_outputs)
-        self_attn_loss_sum = sum(log.get("self_attn_loss", 0) for log in logging_outputs)
+        cross_attn_loss_sum = sum(
+            log.get("cross_attn_loss", 0) for log in logging_outputs
+        )
+        self_attn_loss_sum = sum(
+            log.get("self_attn_loss", 0) for log in logging_outputs
+        )
         enc_attn_loss_sum = sum(log.get("enc_attn_loss", 0) for log in logging_outputs)
         cross_attn_sum = sum(log.get("cross_attn_mean", 0) for log in logging_outputs)
         self_attn_sum = sum(log.get("self_attn_mean", 0) for log in logging_outputs)
@@ -280,32 +331,69 @@ class AttentionLoss(FairseqCriterion):
             [
                 1
                 for log in logging_outputs
-                if ("cross_attn_mean" in log or "self_attn_mean" in log or "enc_attn_mean" in log)
+                if (
+                    "cross_attn_mean" in log
+                    or "self_attn_mean" in log
+                    or "enc_attn_mean" in log
+                )
             ]
         )
 
-        metrics.log_scalar("loss", loss_sum / sample_size / math.log(2), sample_size, round=3)
-        metrics.log_scalar("nll_loss", nll_loss_sum / ntokens / math.log(2), ntokens, round=3)
+        metrics.log_scalar(
+            "loss", loss_sum / sample_size / math.log(2), sample_size, round=3
+        )
+        metrics.log_scalar(
+            "nll_loss", nll_loss_sum / ntokens / math.log(2), ntokens, round=3
+        )
 
         if num_attn > 0:
-            metrics.log_scalar("enc_loss", enc_attn_loss_sum / num_attn / math.log(2), num_attn, round=3)
-            metrics.log_scalar("cross_loss", cross_attn_loss_sum / num_attn / math.log(2), num_attn, round=3)
-            metrics.log_scalar("self_loss", self_attn_loss_sum / num_attn / math.log(2), num_attn, round=3)
-            metrics.log_scalar("enc_attn", enc_attn_sum / num_attn / math.log(2), num_attn, round=3)
-            metrics.log_scalar("cross_attn", cross_attn_sum / num_attn / math.log(2), num_attn, round=3)
-            metrics.log_scalar("self_attn", self_attn_sum / num_attn / math.log(2), num_attn, round=3)
-            metrics.log_scalar("attn_loss", attn_loss_sum / num_attn / math.log(2), num_attn, round=3)
+            metrics.log_scalar(
+                "enc_loss",
+                enc_attn_loss_sum / num_attn / math.log(2),
+                num_attn,
+                round=3,
+            )
+            metrics.log_scalar(
+                "cross_loss",
+                cross_attn_loss_sum / num_attn / math.log(2),
+                num_attn,
+                round=3,
+            )
+            metrics.log_scalar(
+                "self_loss",
+                self_attn_loss_sum / num_attn / math.log(2),
+                num_attn,
+                round=3,
+            )
+            metrics.log_scalar(
+                "enc_attn", enc_attn_sum / num_attn / math.log(2), num_attn, round=3
+            )
+            metrics.log_scalar(
+                "cross_attn", cross_attn_sum / num_attn / math.log(2), num_attn, round=3
+            )
+            metrics.log_scalar(
+                "self_attn", self_attn_sum / num_attn / math.log(2), num_attn, round=3
+            )
+            metrics.log_scalar(
+                "attn_loss", attn_loss_sum / num_attn / math.log(2), num_attn, round=3
+            )
 
-        metrics.log_derived("ppl", lambda meters: utils.get_perplexity(meters["nll_loss"].avg))
+        metrics.log_derived(
+            "ppl", lambda meters: utils.get_perplexity(meters["nll_loss"].avg)
+        )
 
         total = utils.item(sum(log.get("total", 0) for log in logging_outputs))
         if total > 0:
             metrics.log_scalar("total", total)
-            n_correct = utils.item(sum(log.get("n_correct", 0) for log in logging_outputs))
+            n_correct = utils.item(
+                sum(log.get("n_correct", 0) for log in logging_outputs)
+            )
             metrics.log_scalar("n_correct", n_correct)
             metrics.log_derived(
                 "accuracy",
-                lambda meters: round(meters["n_correct"].sum * 100.0 / meters["total"].sum, 3)
+                lambda meters: round(
+                    meters["n_correct"].sum * 100.0 / meters["total"].sum, 3
+                )
                 if meters["total"].sum > 0
                 else float("nan"),
             )

@@ -41,7 +41,8 @@ class ContextualTransformerModel(TransformerModel):
             "--coword-dropout-type",
             choices=("sample", "predefined_sample", "whole", "suffix"),
             default="sample",
-            help="type of coword dropout to use. NOTE: only sample is used" "used in the paper",
+            help="type of coword dropout to use. NOTE: only sample is used"
+            "used in the paper",
         )
 
     @classmethod
@@ -136,15 +137,21 @@ class ContextualTransformerEncoder(TransformerEncoder):
                 padding_mask = src_tokens.eq(self.padding_idx)
                 mask_token = torch.tensor(self.mask_id).to(src_tokens)
                 probs = torch.ones_like(src_tokens) * self.coword_dropout_prob
-                mask = torch.logical_and(torch.bernoulli(probs), torch.logical_not(padding_mask))
+                mask = torch.logical_and(
+                    torch.bernoulli(probs), torch.logical_not(padding_mask)
+                )
                 src_tokens = torch.where(mask == 0, src_tokens, mask_token)
             elif self.coword_dropout_type == "predefined_sample":
                 # This is used for sampling with token specific probabilies
                 # NOTE: this was not used in the paper
-                assert src_sample_probs is not None, "need sample probabilities as a given"
+                assert (
+                    src_sample_probs is not None
+                ), "need sample probabilities as a given"
                 padding_mask = src_tokens.eq(self.padding_idx)
                 mask_token = torch.tensor(self.mask_id).to(src_tokens)
-                mask = torch.logical_and(torch.bernoulli(src_sample_probs), torch.logical_not(padding_mask))
+                mask = torch.logical_and(
+                    torch.bernoulli(src_sample_probs), torch.logical_not(padding_mask)
+                )
                 src_tokens = torch.where(mask == 0, src_tokens, mask_token)
             elif self.coword_dropout_type == "whole":
                 # make tensor with a single token (mask token)
@@ -158,7 +165,9 @@ class ContextualTransformerEncoder(TransformerEncoder):
                 mask = torch.unsqueeze(mask, -1).repeat(1, src_tokens.size(1))
                 src_tokens = torch.where(mask == 0, src_tokens, mask_samples)
             else:
-                raise ValueError(f"unknown type of source dropout {self.coword_dropout_type}")
+                raise ValueError(
+                    f"unknown type of source dropout {self.coword_dropout_type}"
+                )
 
         # Encode source tokens
         # as simple context encoding, we just concatenate context to input
@@ -303,7 +312,9 @@ class ContextualTransformerDecoder(TransformerDecoder):
 
         # embed positions
         if self.embed_positions is not None:
-            positions = self.embed_positions(input_tokens, incremental_state=incremental_state)
+            positions = self.embed_positions(
+                input_tokens, incremental_state=incremental_state
+            )
         else:
             positions = None
 
@@ -341,7 +352,9 @@ class ContextualTransformerDecoder(TransformerDecoder):
         attn: Optional[Tensor] = None
         inner_states: List[Optional[Tensor]] = [x]
         for idx, layer in enumerate(self.layers):
-            if (incremental_state is None or len(incremental_state) == 0) and not full_context_alignment:
+            if (
+                incremental_state is None or len(incremental_state) == 0
+            ) and not full_context_alignment:
                 self_attn_mask = self.buffered_future_mask(x)
             else:
                 self_attn_mask = None
@@ -351,7 +364,10 @@ class ContextualTransformerDecoder(TransformerDecoder):
                 if (encoder_out is not None and len(encoder_out["encoder_out"]) > 0)
                 else None,
                 encoder_out["encoder_padding_mask"][0]
-                if (encoder_out is not None and len(encoder_out["encoder_padding_mask"]) > 0)
+                if (
+                    encoder_out is not None
+                    and len(encoder_out["encoder_padding_mask"]) > 0
+                )
                 else None,
                 incremental_state,
                 self_attn_mask=self_attn_mask,

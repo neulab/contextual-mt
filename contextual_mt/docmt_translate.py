@@ -31,21 +31,29 @@ def main():
     )
     parser.add_argument("--source-lang", default=None)
     parser.add_argument("--target-lang", default=None)
-    parser.add_argument("--path", required=True, metavar="FILE", help="path to model file")
+    parser.add_argument(
+        "--path", required=True, metavar="FILE", help="path to model file"
+    )
     parser.add_argument("--beam", default=5, type=int, metavar="N", help="beam size")
     parser.add_argument(
         "--max-len-a",
         default=0,
         type=float,
         metavar="N",
-        help=("generate sequences of maximum length ax + b, " "where x is the source length"),
+        help=(
+            "generate sequences of maximum length ax + b, "
+            "where x is the source length"
+        ),
     )
     parser.add_argument(
         "--max-len-b",
         default=200,
         type=int,
         metavar="N",
-        help=("generate sequences of maximum length ax + b, " "where x is the source length"),
+        help=(
+            "generate sequences of maximum length ax + b, "
+            "where x is the source length"
+        ),
     )
     parser.add_argument(
         "--min-len",
@@ -79,7 +87,9 @@ def main():
         assert args.reference_file is not None
 
     # load pretrained model, set eval and send to cuda
-    pretrained = hub_utils.from_pretrained(args.path, checkpoint_file="checkpoint_best.pt")
+    pretrained = hub_utils.from_pretrained(
+        args.path, checkpoint_file="checkpoint_best.pt"
+    )
     models = pretrained["models"]
     for model in models:
         model.cuda()
@@ -90,7 +100,9 @@ def main():
     tgt_dict = pretrained["task"].tgt_dict
     source_context_size = pretrained["task"].args.source_context_size
     target_context_size = pretrained["task"].args.target_context_size
-    generator = pretrained["task"].build_generator(models, args, seq_gen_cls=ContextualSequenceGenerator)
+    generator = pretrained["task"].build_generator(
+        models, args, seq_gen_cls=ContextualSequenceGenerator
+    )
 
     # load sentencepiece models (assume they are in the checkpoint dirs)
     if os.path.exists(os.path.join(args.path, "spm.model")):
@@ -143,7 +155,9 @@ def main():
         samples = []
         for idx in range(args.batch_size):
             # if any of the docs in the batch has finished replace by a new one
-            if current_docs[idx] is None or current_docs_pos[idx] >= len(current_docs[idx]):
+            if current_docs[idx] is None or current_docs_pos[idx] >= len(
+                current_docs[idx]
+            ):
                 if doc_idx < len(documents):
                     current_docs[idx] = documents[doc_idx]
                     current_docs_ids[idx] = doc_idx
@@ -214,7 +228,9 @@ def main():
             if args.gold_target_context:
                 tgt_context_lines[idx].append(batch_targets[batch_idx])
             else:
-                tgt_context_lines[idx].append(hyp_ids[:-1] if hyp_ids[-1] == tgt_dict.eos() else hyp_ids)
+                tgt_context_lines[idx].append(
+                    hyp_ids[:-1] if hyp_ids[-1] == tgt_dict.eos() else hyp_ids
+                )
 
         bar.update(len(samples))
 
