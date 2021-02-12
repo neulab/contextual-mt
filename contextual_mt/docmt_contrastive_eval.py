@@ -59,12 +59,17 @@ def load_contrastive(
             src = None
             tgts = []
             while (index + i) < len(src_lines) and (
-                (dataset == "contrapro" and (src is None or src == src_lines[index + i])) or (dataset == "bawden" and (i < 2))
+                (dataset == "contrapro" and (src is None or src == src_lines[index + i]))
+                or (dataset == "bawden" and (i < 2))
             ):
                 src = src_lines[index + i]
                 tgt = tgt_lines[index + i]
-                src_context = [src_ctx_lines[(index + i) * included_context_size + j].strip() for j in range(included_context_size)]
-                tgt_context = [tgt_ctx_lines[(index + i) * included_context_size + j].strip() for j in range(included_context_size)]
+                src_context = [
+                    src_ctx_lines[(index + i) * included_context_size + j].strip() for j in range(included_context_size)
+                ]
+                tgt_context = [
+                    tgt_ctx_lines[(index + i) * included_context_size + j].strip() for j in range(included_context_size)
+                ]
                 tgts.append(tgt.strip())
                 i += 1
 

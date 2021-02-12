@@ -411,8 +411,12 @@ class AttnRegTransformerDecoder(TransformerDecoder):
                 self_attn_mask = None
             x, layer_attn, _ = layer(
                 x,
-                encoder_out["encoder_out"][0] if (encoder_out is not None and len(encoder_out["encoder_out"]) > 0) else None,
-                encoder_out["encoder_padding_mask"][0] if (encoder_out is not None and len(encoder_out["encoder_padding_mask"]) > 0) else None,
+                encoder_out["encoder_out"][0]
+                if (encoder_out is not None and len(encoder_out["encoder_out"]) > 0)
+                else None,
+                encoder_out["encoder_padding_mask"][0]
+                if (encoder_out is not None and len(encoder_out["encoder_padding_mask"]) > 0)
+                else None,
                 incremental_state,
                 self_attn_mask=self_attn_mask,
                 self_attn_padding_mask=self_attn_padding_mask,
@@ -509,7 +513,9 @@ class TransformerDecoderLayerReturnSelfAttention(TransformerDecoderLayer):
             self.self_attn._set_input_buffer(incremental_state, saved_state)
         _self_attn_input_buffer = self.self_attn._get_input_buffer(incremental_state)
         if self.cross_self_attention and not (
-            incremental_state is not None and _self_attn_input_buffer is not None and "prev_key" in _self_attn_input_buffer
+            incremental_state is not None
+            and _self_attn_input_buffer is not None
+            and "prev_key" in _self_attn_input_buffer
         ):
             if self_attn_mask is not None:
                 assert encoder_out is not None

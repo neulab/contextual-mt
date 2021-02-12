@@ -80,7 +80,9 @@ class ContextualSequenceGenerator(SequenceGenerator):
         assert encoder_outs is not None
 
         # initialize buffers
-        scores = torch.zeros(bsz * beam_size, max_len + 1).to(src_tokens).float()  # +1 for eos; pad is never chosen for scoring
+        scores = (
+            torch.zeros(bsz * beam_size, max_len + 1).to(src_tokens).float()
+        )  # +1 for eos; pad is never chosen for scoring
         tokens = torch.zeros(bsz * beam_size, max_len + 2).to(src_tokens).long().fill_(self.pad)  # +2 for eos and pad
         tokens[:, 0] = self.eos if bos_token is None else bos_token
         attn: Optional[Tensor] = None
@@ -89,7 +91,9 @@ class ContextualSequenceGenerator(SequenceGenerator):
         # For example, suppose we're sampling and have already finalized 2/5
         # samples. Then cands_to_ignore would mark 2 positions as being ignored,
         # so that we only finalize the remaining 3 samples.
-        cands_to_ignore = torch.zeros(bsz, beam_size).to(src_tokens).eq(-1)  # forward and backward-compatible False mask
+        cands_to_ignore = (
+            torch.zeros(bsz, beam_size).to(src_tokens).eq(-1)
+        )  # forward and backward-compatible False mask
 
         # list of completed sentences
         finalized = torch.jit.annotate(
@@ -97,7 +101,9 @@ class ContextualSequenceGenerator(SequenceGenerator):
             [torch.jit.annotate(List[Dict[str, Tensor]], []) for i in range(bsz)],
         )  # contains lists of dictionaries of infomation about the hypothesis being finalized at each step
 
-        finished = [False for i in range(bsz)]  # a boolean array indicating if the sentence at the index is finished or not
+        finished = [
+            False for i in range(bsz)
+        ]  # a boolean array indicating if the sentence at the index is finished or not
         num_remaining_sent = bsz  # number of sentences remaining
 
         # number of candidate hypos per step

@@ -56,10 +56,14 @@ class DocumentTranslationTask(TranslationTask):
                 "to disable detokenization, e.g., when using sentencepiece)"
             )
             detok_args = json.loads(getattr(args, "eval_bleu_detok_args", "{}") or "{}")
-            self.tokenizer = encoders.build_tokenizer(Namespace(tokenizer=getattr(args, "eval_bleu_detok", None), **detok_args))
+            self.tokenizer = encoders.build_tokenizer(
+                Namespace(tokenizer=getattr(args, "eval_bleu_detok", None), **detok_args)
+            )
 
             gen_args = json.loads(getattr(args, "eval_bleu_args", "{}") or "{}")
-            self.sequence_generator = self.build_generator([model], Namespace(**gen_args), seq_gen_cls=ContextualSequenceGenerator)
+            self.sequence_generator = self.build_generator(
+                [model], Namespace(**gen_args), seq_gen_cls=ContextualSequenceGenerator
+            )
         return model
 
     def load_dataset(self, split, epoch=1, combine=False, **kwargs):

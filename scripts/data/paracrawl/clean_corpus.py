@@ -27,7 +27,9 @@ def main():
     source_out = f"{args.output_pref}.{args.source_lang}"
     target_out = f"{args.output_pref}.{args.target_lang}"
 
-    with open(source_in, "r") as src_in, open(target_in, "r") as tgt_in, open(source_out, "w") as src_out, open(target_out, "w") as tgt_out:
+    with open(source_in, "r") as src_in, open(target_in, "r") as tgt_in, open(source_out, "w") as src_out, open(
+        target_out, "w"
+    ) as tgt_out:
         # read size chunk_size into memory
         while True:
             src_lines, tgt_lines = [], []
@@ -54,7 +56,11 @@ def main():
             src_labels = model.predict(src_lines)
             tgt_labels = model.predict(tgt_lines)
             for idx, (src_lbl, tgt_lbl) in enumerate(zip(src_labels, tgt_labels)):
-                filter_flags[idx] = filter_flags[idx] or (src_lbl != f"__{args.source_lang}__") or (tgt_lbl != f"__{args.target_lang}__")
+                filter_flags[idx] = (
+                    filter_flags[idx]
+                    or (src_lbl != f"__{args.source_lang}__")
+                    or (tgt_lbl != f"__{args.target_lang}__")
+                )
 
             for filter_f, src_l, tgt_l in zip(filter_flags, src_lines, tgt_lines):
                 if not filter_f:

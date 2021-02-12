@@ -23,7 +23,9 @@ def collate(samples, pad_id, eos_id, sort_by_src=False):
     )
     src_ctx_lengths = torch.LongTensor([s["src_context"].ne(pad_id).long().sum() for s in samples])
     # encode target and target context
-    tgt_ctx_tokens = data_utils.collate_tokens([s["tgt_context"] for s in samples], pad_id, eos_id, move_eos_to_beginning=True)
+    tgt_ctx_tokens = data_utils.collate_tokens(
+        [s["tgt_context"] for s in samples], pad_id, eos_id, move_eos_to_beginning=True
+    )
     tgt_ctx_lengths = torch.LongTensor([s["tgt_context"].ne(pad_id).long().sum() for s in samples])
     if sort_by_src:
         src_lengths, sort_order = src_lengths.sort(descending=True)
@@ -281,7 +283,9 @@ class ContextualDataset(FairseqDataset):
 
     @property
     def supports_prefetch(self):
-        return getattr(self.src, "supports_prefetch", False) and (getattr(self.tgt, "supports_prefetch", False) or self.tgt is None)
+        return getattr(self.src, "supports_prefetch", False) and (
+            getattr(self.tgt, "supports_prefetch", False) or self.tgt is None
+        )
 
     def prefetch(self, indices):
         self.src.prefetch(indices)

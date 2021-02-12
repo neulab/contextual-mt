@@ -28,7 +28,11 @@ def extract_eval(eval_inp, eval_out, docids_out=None):
     with open(eval_inp, "r") as f:
         all_docs = f.read()
         docs_xml = xmltodict.parse(all_docs)
-        docs = docs_xml["mteval"]["srcset"]["doc"] if "srcset" in docs_xml["mteval"] else docs_xml["mteval"]["refset"]["doc"]
+        docs = (
+            docs_xml["mteval"]["srcset"]["doc"]
+            if "srcset" in docs_xml["mteval"]
+            else docs_xml["mteval"]["refset"]["doc"]
+        )
 
     eval_out_f = open(eval_out, "a")
     if docids_out is not None:
@@ -56,8 +60,16 @@ if __name__ == "__main__":
     parser.add_argument("--testsets", nargs="*", default=["tst2015"])
     args = parser.parse_args()
 
-    first_l = args.source_lang if glob.glob(f"{args.raw_data}/*.{args.source_lang}-{args.target_lang}.*") else args.target_lang
-    second_l = args.target_lang if glob.glob(f"{args.raw_data}/*.{args.source_lang}-{args.target_lang}.*") else args.source_lang
+    first_l = (
+        args.source_lang
+        if glob.glob(f"{args.raw_data}/*.{args.source_lang}-{args.target_lang}.*")
+        else args.target_lang
+    )
+    second_l = (
+        args.target_lang
+        if glob.glob(f"{args.raw_data}/*.{args.source_lang}-{args.target_lang}.*")
+        else args.source_lang
+    )
 
     train_inp_prefix = os.path.join(args.raw_data, f"train.tags.{first_l}-{second_l}")
     train_out_prefix = os.path.join(args.out_data, f"train.{args.source_lang}-{args.target_lang}")

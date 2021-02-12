@@ -16,15 +16,38 @@ class AttentionRegularizationTask(DocumentTranslationTask):
         DocumentTranslationTask.add_args(parser)
         # attn reg options
         parser.add_argument(
-            "--regularize-heads", default=None, type=int, help="if set, regularize the i-th attention head using highlighted data"
+            "--regularize-heads",
+            default=None,
+            type=int,
+            help="if set, regularize the i-th attention head using highlighted data",
         )
         parser.add_argument(
-            "--regularize-attention", default=["self", "cross", "enc"], nargs="+", type=str, help="specify which attention to regularize"
+            "--regularize-attention",
+            default=["self", "cross", "enc"],
+            nargs="+",
+            type=str,
+            help="specify which attention to regularize",
         )
-        parser.add_argument("--enc-alignment-layer", default=[0], nargs="+", type=int, help="specify which encoder layer to regularize")
-        parser.add_argument("--dec-alignment-layer", default=[5], nargs="+", type=int, help="specify which decoder layer to regularize")
-        parser.add_argument("--self-alignment-layer", default=None, nargs="+", type=int, help="specify which decoder layer to regularize")
-        parser.add_argument("--cross-alignment-layer", default=None, nargs="+", type=int, help="specify which decoder layer to regularize")
+        parser.add_argument(
+            "--enc-alignment-layer", default=[0], nargs="+", type=int, help="specify which encoder layer to regularize"
+        )
+        parser.add_argument(
+            "--dec-alignment-layer", default=[5], nargs="+", type=int, help="specify which decoder layer to regularize"
+        )
+        parser.add_argument(
+            "--self-alignment-layer",
+            default=None,
+            nargs="+",
+            type=int,
+            help="specify which decoder layer to regularize",
+        )
+        parser.add_argument(
+            "--cross-alignment-layer",
+            default=None,
+            nargs="+",
+            type=int,
+            help="specify which decoder layer to regularize",
+        )
         parser.add_argument(
             "--highlight-sample",
             default=None,
@@ -151,7 +174,9 @@ class AttentionRegularizationTask(DocumentTranslationTask):
                 else:
                     return x[0]
 
-            self.datasets[split] = MultiCorpusSampledDataset(OrderedDict({"highlighted": highlighted_data, "main": main_data}), sampler)
+            self.datasets[split] = MultiCorpusSampledDataset(
+                OrderedDict({"highlighted": highlighted_data, "main": main_data}), sampler
+            )
 
         else:
             self.datasets[split] = main_data
