@@ -1,8 +1,6 @@
 import torch
 import numpy as np
 
-from collections import defaultdict
-
 from fairseq.data import data_utils, FairseqDataset
 
 
@@ -47,6 +45,51 @@ def collate(samples, pad_id, eos_id, sort_by_src=False):
         },
     }
 
+    src_ctx_highlights = data_utils.collate_tokens(
+        [s["h_src_context"] for s in samples],
+        0,
+        0,
+    )
+
+    tgt_ctx_highlights = data_utils.collate_tokens(
+        [s["h_tgt_context"] for s in samples],
+        0,
+        0,
+    )
+
+    source_highlights = data_utils.collate_tokens(
+        [s["h_source"] for s in samples],
+        0,
+        0,
+    )
+
+    target_highlights = data_utils.collate_tokens(
+        [s["h_target"] for s in samples],
+        0,
+        0,
+    )
+
+    src_words = data_utils.collate_tokens(
+        [s["src_words_idx"] for s in samples],
+        0,
+        0,
+    )
+
+    tgt_words = data_utils.collate_tokens(
+        [s["tgt_words_idx"] for s in samples],
+        0,
+        0,
+    )
+
+    batch["highlights"] = {
+        "src_ctx_highlights": src_ctx_highlights,
+        "tgt_ctx_highlights": tgt_ctx_highlights,
+        "source_highlights": source_highlights,
+        "target_highlights": target_highlights,
+        "src_words": src_words,
+        "tgt_words": tgt_words,
+    }
+
     if samples[0].get("target", None) is not None:
         tgt_tokens = data_utils.collate_tokens(
             [s["target"] for s in samples],
@@ -76,46 +119,108 @@ def collate(samples, pad_id, eos_id, sort_by_src=False):
     else:
         ntokens = src_lengths.sum().item()
 
-    if samples[0].get("src_sample_probs", None) is not None:
-        src_sample_probs = data_utils.collate_tokens(
-            [s["src_sample_probs"] for s in samples],
-            pad_idx=0.0,
-        )
-        if sort_by_src:
-            src_sample_probs.index_select(0, sort_order)
-
-        batch["net_input"]["src_sample_probs"] = src_sample_probs
-
     batch["ntokens"] = ntokens
     return batch
 
 
-class ContextualDataset(FairseqDataset):
-    """
-    A pair of torch.utils.data.Datasets with a contextual structure
+def extract_highlights(data, hon_id, hoff_id, p_id=None, p_id2=None):
 
-    Args:
-        src (torch.utils.data.Dataset): source dataset to wrap
-        src_sizes (List[int]): source sentence lengths
-        src_dict (~fairseq.data.Dictionary): source vocabulary
-        tgt (torch.utils.data.Dataset): target dataset to wrap
-        tgt_sizes (List[int]): target sentence lengths
-        tgt_dict (~fairseq.data.Dictionary, optional): target vocabulary
-        contextual_ids (List[int]): List of indices associating every sample
-            to a "document"
-        source_context_size (int): the number o sentences to pass in the source
-            context
-        target_context_size (int): the number of sentences to pass in the target
-            context
-        pos_drop_probs: NOT USED
-        src_pos_targ: NOT USED
-        sampled_context_size (bool): if set, context sizes will be sampled in
-            a between 0 and `src/tgt_ctx_size` (default: False)
-        break_tag: token used to separate context sentences
-        shuffle (bool, optional): shuffle dataset elements before batching
-            (default: True).
-    """
+    tokens_data = []
+    highlighted_data = []
+    source_words_idx = []
 
+    for tokens in data:
+        highlighted = []
+        high = 0
+        source_word = 0
+        to_delete = []
+        words_idx = []
+        for i, token in enumerate(tokens):
+            if token == hon_id:
+                high = 1
+                to_delete.append(i)
+            elif token == hoff_id:
+                high = 0
+                to_delete.append(i)
+            elif token == p_id:
+                source_word = 1
+                to_delete.append(i)
+            elif token == p_id2:
+                source_word = 0
+                to_delete.append(i)
+            else:
+                highlighted.append(high)
+                words_idx.append(source_word)
+
+        for i in to_delete[::-1]:
+            tokens = torch.cat([tokens[:i], tokens[i + 1 :]])
+        # For eos tag
+        highlighted.append(0)
+        words_idx.append(0)
+
+        highlighted = torch.Tensor(highlighted)
+        words_idx = torch.Tensor(words_idx)
+
+        tokens_data.append(tokens)
+        highlighted_data.append(highlighted)
+
+        if p_id is not None:
+            source_words_idx.append(words_idx)
+
+    if p_id is not None:
+        return tokens_data, highlighted_data, source_words_idx
+    return tokens_data, highlighted_data
+
+
+def extract_contrastive(data, hon_id, hoff_id, p_id=None, p_id2=None):
+
+    tokens_data = []
+    source_words_idx = []
+    highlighted_data = []
+    high = 0
+
+    for tokens in data:
+        highlighted = []
+        to_delete = []
+        words_idx = []
+        for i, token in enumerate(tokens):
+            if token == hon_id:
+                high = 1
+                to_delete.append(i)
+            elif token == hoff_id:
+                high = 0
+                to_delete.append(i)
+            elif token == p_id:
+                source_word = 1
+                to_delete.append(i)
+            elif token == p_id2:
+                source_word = 0
+                to_delete.append(i)
+            else:
+                highlighted.append(high)
+                words_idx.append(source_word)
+
+        for i in to_delete[::-1]:
+            tokens = torch.cat([tokens[:i], tokens[i + 1 :]])
+        # For eos tag
+        highlighted.append(0)
+        words_idx.append(0)
+
+        highlighted = torch.Tensor(highlighted)
+        words_idx = torch.Tensor(words_idx)
+
+        tokens_data.append(tokens)
+        highlighted_data.append(highlighted)
+
+        if p_id is not None:
+            source_words_idx.append(words_idx)
+
+    if p_id is not None:
+        return tokens_data, highlighted_data, source_words_idx
+    return tokens_data, highlighted_data
+
+
+class HighlightedDataset(FairseqDataset):
     def __init__(
         self,
         src,
@@ -124,14 +229,17 @@ class ContextualDataset(FairseqDataset):
         tgt,
         tgt_sizes,
         tgt_dict,
-        contextual_ids,
-        src_ctx_size=0,
-        tgt_ctx_size=0,
-        pos_drop_probs=None,
-        src_pos_tags=None,
+        ctx_src,
+        ctx_src_sizes,
+        ctx_tgt,
+        ctx_tgt_sizes,
         break_tag=None,
-        sample_context_size=False,
+        hon_tag=None,
+        hoff_tag=None,
+        p_tag=None,
+        p2_tag=None,
         shuffle=True,
+        contrastive=False,
     ):
         assert src_dict.pad() == tgt_dict.pad()
         assert src_dict.eos() == tgt_dict.eos()
@@ -139,82 +247,51 @@ class ContextualDataset(FairseqDataset):
 
         assert len(src) == len(tgt), "Source and target must contain the same number of examples"
 
-        self.src = src
-        self.tgt = tgt
         self.src_dict = src_dict
         self.tgt_dict = tgt_dict
-        self.src_ctx_size = src_ctx_size
-        self.tgt_ctx_size = tgt_ctx_size
-        self.contextual_ids = np.array(contextual_ids)
         self.break_tag = break_tag
-        self.sample_context_size = sample_context_size
+        self.hon_tag = hon_tag
+        self.hoff_tag = hoff_tag
         self.shuffle = shuffle
+        self.contrastive = contrastive
+
+        src_hon_id = self.src_dict.index(self.hon_tag)
+        src_hoff_id = self.src_dict.index(self.hoff_tag)
+        tgt_hon_id = self.tgt_dict.index(self.hon_tag)
+        tgt_hoff_id = self.tgt_dict.index(self.hoff_tag)
+
+        self.src, self.h_src, self.src_words_idx = extract_highlights(
+            src, src_hon_id, src_hoff_id, self.src_dict.index(p_tag), self.src_dict.index(p2_tag)
+        )
+        self.tgt, self.h_tgt, self.tgt_words_idx = extract_highlights(
+            tgt, tgt_hon_id, tgt_hoff_id, self.tgt_dict.index(p_tag), self.tgt_dict.index(p2_tag)
+        )
+        self.c_src, self.h_c_src = extract_highlights(ctx_src, src_hon_id, src_hoff_id)
+        self.c_tgt, self.h_c_tgt = extract_highlights(ctx_tgt, tgt_hon_id, tgt_hoff_id)
 
         # recompute sizes  based on context size and special tokens
         full_src_sizes, full_tgt_sizes = [], []
         for i, size in enumerate(src_sizes):
-            for j in range(1, self.src_ctx_size + 1):
-                if self.contextual_ids[i - j] != self.contextual_ids[i]:
-                    break
-                size += src_sizes[i - j] + 1
+            size += ctx_src_sizes[i] + 1
             full_src_sizes.append(size + 1)
-        # FIXME: if target context is part of input, this needs to be rethinked
         for i, size in enumerate(tgt_sizes):
-            for j in range(1, self.tgt_ctx_size + 1):
-                if self.contextual_ids[i - j] != self.contextual_ids[i]:
-                    break
-                size += tgt_sizes[i - j] + 1
+            size += ctx_tgt_sizes[i] + 1
             full_tgt_sizes.append(size + 1)
 
         self.src_sizes = np.array(full_src_sizes)
         self.tgt_sizes = np.array(full_tgt_sizes)
 
-        # NOTE: not used in the paper
-        if pos_drop_probs is not None:
-            self.pos_drop_probs = defaultdict(lambda: 0.0)
-            for pos, p in pos_drop_probs.items():
-                self.pos_drop_probs[pos] = p
-        else:
-            self.pos_drop_probs = None
-        self.src_pos_tags = src_pos_tags
-
     def __getitem__(self, index):
-        # remove included eos token
-        src_item = self.src[index][:-1]
-        tgt_item = self.tgt[index][:-1]
-        src_ctx_item = torch.tensor([]).long()
-        tgt_ctx_item = torch.tensor([]).long()
-        src_break_id = torch.tensor([self.src_dict.index(self.break_tag)])
-        tgt_break_id = torch.tensor([self.tgt_dict.index(self.break_tag)])
-        if self.src_ctx_size > 0:
-            if self.sample_context_size:
-                src_context_size = np.random.randint(0, self.src_ctx_size + 1)
-            else:
-                src_context_size = self.src_ctx_size
-
-            for i in range(1, src_context_size + 1):
-                # break if previous sample is from a different context (doc/chat)
-                if self.contextual_ids[index - i] != self.contextual_ids[index]:
-                    break
-                # add break tag if passed
-                if len(src_ctx_item) > 0 and self.break_tag is not None:
-                    src_ctx_item = torch.cat([src_break_id, src_ctx_item])
-
-                src_ctx_item = torch.cat([self.src[index - i][:-1], src_ctx_item])
-
-        if self.tgt_ctx_size > 0:
-            if self.sample_context_size:
-                tgt_context_size = np.random.randint(0, self.tgt_ctx_size + 1)
-            else:
-                tgt_context_size = self.tgt_ctx_size
-
-            for i in range(1, tgt_context_size + 1):
-                if self.contextual_ids[index - i] != self.contextual_ids[index]:
-                    break
-                if len(tgt_ctx_item) > 0 and self.break_tag is not None:
-                    tgt_ctx_item = torch.cat([tgt_break_id, tgt_ctx_item])
-
-                tgt_ctx_item = torch.cat([self.tgt[index - i][:-1], tgt_ctx_item])
+        src_item = self.src[index]
+        tgt_item = self.tgt[index]
+        src_ctx_item = self.c_src[index]
+        tgt_ctx_item = self.c_tgt[index]
+        h_src_item = self.h_src[index]
+        h_tgt_item = self.h_tgt[index]
+        h_src_ctx_item = self.h_c_src[index]
+        h_tgt_ctx_item = self.h_c_tgt[index]
+        src_words = self.src_words_idx[index]
+        tgt_words = self.tgt_words_idx[index]
 
         src_eos_id = torch.Tensor([self.src_dict.eos()]).long()
         tgt_eos_id = torch.Tensor([self.tgt_dict.eos()]).long()
@@ -222,19 +299,20 @@ class ContextualDataset(FairseqDataset):
         tgt_ctx_item = torch.cat([tgt_ctx_item, tgt_eos_id])
         src_item = torch.cat([src_item, src_eos_id])
         tgt_item = torch.cat([tgt_item, tgt_eos_id])
+
         sample = {
             "id": index,
             "src_context": src_ctx_item,
             "source": src_item,
             "tgt_context": tgt_ctx_item,
             "target": tgt_item,
+            "h_src_context": h_src_ctx_item,
+            "h_source": h_src_item,
+            "h_tgt_context": h_tgt_ctx_item,
+            "h_target": h_tgt_item,
+            "src_words_idx": src_words,
+            "tgt_words_idx": tgt_words,
         }
-
-        if self.src_pos_tags is not None and self.pos_drop_probs is not None:
-            probs = []
-            for pos in self.src_pos_tags[index]:
-                probs.append(self.pos_drop_probs[pos])
-            sample["src_sample_probs"] = torch.tensor(probs)
 
         return sample
 
@@ -252,8 +330,7 @@ class ContextualDataset(FairseqDataset):
     def num_tokens(self, index):
         """Return the number of tokens in a sample. This value is used to
         enforce ``--max-tokens`` during batching."""
-        # FIXME: do something about the sample_context_size. currently it always
-        # assumes the maximum context size, so this might lead to underusage of gpu
+        # FIXME: incoporate context size here
         return max(
             self.src_sizes[index],
             self.tgt_sizes[index] if self.tgt_sizes is not None else 0,
@@ -262,10 +339,15 @@ class ContextualDataset(FairseqDataset):
     def size(self, index):
         """Return an example's size as a float or tuple. This value is used when
         filtering a dataset with ``--max-positions``."""
+        # FIXME: incoporate context size here
         return (
             self.src_sizes[index],
             self.tgt_sizes[index] if self.tgt_sizes is not None else 0,
         )
+
+    @property
+    def sizes(self):
+        return self.src_sizes
 
     def ordered_indices(self):
         """Return an ordered list of indices. Batches will be constructed based

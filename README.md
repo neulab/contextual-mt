@@ -3,12 +3,14 @@
 Implementations of context-aware models for document-level translation tasks, used in 
 
 1. [Measuring and Incresing Context Usage in Context-Aware Machine Translation](FIXME)
+2. [Do Context-Aware Translation Models Pay the Right Attention?](FIXME)
 
 Currently supports:
 
 * Training concatenation-based document-level machine translation models
 * Training with CoWord dropout and dynamic context size
 * Measuring CXMI for models 
+* Training with attention regularization
 
 
 ## Requirements 
@@ -86,6 +88,30 @@ fairseq-train \
     --eval-bleu-args '{"beam": 5, "max_len_a": 1.2, "max_len_b": 10}' \
     --eval-bleu-remove-bpe sentencepiece \
     --eval-bleu-print-samples \
+    --best-checkpoint-metric bleu --maximize-best-checkpoint-metric \
+    --save-dir ${checkpoint_dir} --no-epoch-checkpoints
+```
+
+To apply attention regularization during training, select the `attention_regularization` task:
+
+```bash
+fairseq-train \
+    ${bin_dir} --user-dir $REPO/dialogue_mt \
+    --task attention_regularization \
+    --source-context-size $N --target-context-size $M \
+    --source-lang en --target-lang fr \
+    --log-interval 10 \
+    --arch contextual_transformer --share-decoder-input-output-embed  \
+    --optimizer adam --adam-betas '(0.9, 0.98)' --clip-norm 0.1 \
+    --lr 5e-4 --lr-scheduler inverse_sqrt  --warmup-updates 4000 \
+    --criterion attention_loss --label-smoothing 0.1 --dropout 0.3 --weight-decay 0.0001 \
+    --regularize-heads 0 --regularize-attention enc cross self \
+    --enc-alignment-layer --cross-alignment-layer 0 --self-alignment-layer 5 \
+    --highlight-sample 0.2 --kl-lambda 10 \
+    --max-tokens  4096 --max-tokens-valid 1024 --update-freq 8 --seed 42 \
+    --eval-bleu \
+    --eval-bleu-args '{"beam": 5, "max_len_a": 1.2, "max_len_b": 10}' \
+    --eval-bleu-remove-bpe sentencepiece \
     --best-checkpoint-metric bleu --maximize-best-checkpoint-metric \
     --save-dir ${checkpoint_dir} --no-epoch-checkpoints
 ```

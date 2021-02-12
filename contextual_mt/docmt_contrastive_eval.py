@@ -36,9 +36,9 @@ def load_contrastive(
 
     # load files needed
     # and binarize
-    with open(source_file, "r") as src_f, open(target_file, "r") as tgt_f, open(
-        src_context_file
-    ) as src_ctx_f, open(tgt_context_file) as tgt_ctx_f:
+    with open(source_file, "r") as src_f, open(target_file, "r") as tgt_f, open(src_context_file) as src_ctx_f, open(
+        tgt_context_file
+    ) as tgt_ctx_f:
         srcs = []
         srcs_context = []
         tgts_context = []
@@ -48,15 +48,9 @@ def load_contrastive(
         src_ctx_lines = src_ctx_f.readlines()
         tgt_lines = tgt_f.readlines()
         tgt_ctx_lines = tgt_ctx_f.readlines()
-        assert len(src_lines) == len(
-            tgt_lines
-        ), "source and target files have different sizes"
-        assert len(src_ctx_lines) == len(
-            tgt_ctx_lines
-        ), "src_content and tgt_context files have different_sizes"
-        assert (
-            len(src_ctx_lines) % len(src_lines) == 0
-        ), "src_context file lines aren't multiple of source lines"
+        assert len(src_lines) == len(tgt_lines), "source and target files have different sizes"
+        assert len(src_ctx_lines) == len(tgt_ctx_lines), "src_content and tgt_context files have different_sizes"
+        assert len(src_ctx_lines) % len(src_lines) == 0, "src_context file lines aren't multiple of source lines"
         included_context_size = len(src_ctx_lines) // len(src_lines)
 
         index = 0
@@ -65,22 +59,12 @@ def load_contrastive(
             src = None
             tgts = []
             while (index + i) < len(src_lines) and (
-                (
-                    dataset == "contrapro"
-                    and (src is None or src == src_lines[index + i])
-                )
-                or (dataset == "bawden" and (i < 2))
+                (dataset == "contrapro" and (src is None or src == src_lines[index + i])) or (dataset == "bawden" and (i < 2))
             ):
                 src = src_lines[index + i]
                 tgt = tgt_lines[index + i]
-                src_context = [
-                    src_ctx_lines[(index + i) * included_context_size + j].strip()
-                    for j in range(included_context_size)
-                ]
-                tgt_context = [
-                    tgt_ctx_lines[(index + i) * included_context_size + j].strip()
-                    for j in range(included_context_size)
-                ]
+                src_context = [src_ctx_lines[(index + i) * included_context_size + j].strip() for j in range(included_context_size)]
+                tgt_context = [tgt_ctx_lines[(index + i) * included_context_size + j].strip() for j in range(included_context_size)]
                 tgts.append(tgt.strip())
                 i += 1
 
@@ -101,9 +85,7 @@ def load_contrastive(
                         best_pron = pron
                         max_count = count
                 if max_count == 0:
-                    raise ValueError(
-                        f"no pronoun found in one of the sentences: {tgts[0]}"
-                    )
+                    raise ValueError(f"no pronoun found in one of the sentences: {tgts[0]}")
             else:
                 best_pron = None
 
@@ -115,9 +97,7 @@ def load_contrastive(
             tgts_context.append(tgt_context)
             index += i
 
-    assert len([t for tgt in all_tgts for t in tgt]) == len(
-        tgt_lines
-    ), "ended up with differnt number of lines..."
+    assert len([t for tgt in all_tgts for t in tgt]) == len(tgt_lines), "ended up with differnt number of lines..."
     return srcs, all_tgts, tgt_labels, srcs_context, tgts_context
 
 
@@ -131,12 +111,8 @@ def main():
     parser.add_argument("--target-context-size", default=0, type=int)
     parser.add_argument("--source-lang", default=None)
     parser.add_argument("--target-lang", default=None)
-    parser.add_argument(
-        "--dataset", choices=("contrapro", "bawden"), default="contrapro"
-    )
-    parser.add_argument(
-        "--path", required=True, metavar="FILE", help="path to model file"
-    )
+    parser.add_argument("--dataset", choices=("contrapro", "bawden"), default="contrapro")
+    parser.add_argument("--path", required=True, metavar="FILE", help="path to model file")
     parser.add_argument("--checkpoint-file", default="checkpoint_best.pt")
     parser.add_argument("--save-scores", default=None, type=str)
     parser.add_argument(
@@ -148,9 +124,7 @@ def main():
     args = parser.parse_args()
 
     # load pretrained model, set eval and send to cuda
-    pretrained = hub_utils.from_pretrained(
-        args.path, checkpoint_file=args.checkpoint_file
-    )
+    pretrained = hub_utils.from_pretrained(args.path, checkpoint_file=args.checkpoint_file)
     models = pretrained["models"]
     for model in models:
         model.cuda()
@@ -193,44 +167,26 @@ def main():
     # and binarize
     srcs = [encode(s, src_spm, src_dict) for s in srcs]
     all_tgts = [[encode(s, tgt_spm, tgt_dict) for s in tgts] for tgts in all_tgts]
-    srcs_context = [
-        [encode(s, src_spm, src_dict) for s in context] for context in srcs_contexts
-    ]
-    tgts_context = [
-        [encode(s, tgt_spm, tgt_dict) for s in context] for context in tgts_contexts
-    ]
+    srcs_context = [[encode(s, src_spm, src_dict) for s in context] for context in srcs_contexts]
+    tgts_context = [[encode(s, tgt_spm, tgt_dict) for s in context] for context in tgts_contexts]
 
     label_corrects = {label: [] for label in set(tgt_labels)}
     bar = tqdm.tqdm(total=sum(1 for _ in srcs))
     corrects = []
     attentions, src_log, src_context_log, tgt_context_log, tgt_log = [], [], [], [], []
     all_scores = []
-    for src, src_ctx, contr_tgts, tgt_ctx, label in zip(
-        srcs, srcs_context, all_tgts, tgts_context, tgt_labels
-    ):
+    for src, src_ctx, contr_tgts, tgt_ctx, label in zip(srcs, srcs_context, all_tgts, tgts_context, tgt_labels):
         samples = []
         for tgt in contr_tgts:
             if concat_model:
-                src_ctx_tensor = create_context(
-                    src_ctx, source_context_size, src_dict.index("<brk>")
-                )
+                src_ctx_tensor = create_context(src_ctx, source_context_size, src_dict.index("<brk>"))
                 if len(src_ctx_tensor) > 0:
-                    src_ctx_tensor = torch.cat(
-                        [src_ctx_tensor, torch.tensor([src_dict.index("<brk>")])]
-                    )
-                full_src = torch.cat(
-                    [src_ctx_tensor, src, torch.tensor([src_dict.eos()])]
-                )
-                tgt_ctx_tensor = create_context(
-                    tgt_ctx, target_context_size, tgt_dict.index("<brk>")
-                )
+                    src_ctx_tensor = torch.cat([src_ctx_tensor, torch.tensor([src_dict.index("<brk>")])])
+                full_src = torch.cat([src_ctx_tensor, src, torch.tensor([src_dict.eos()])])
+                tgt_ctx_tensor = create_context(tgt_ctx, target_context_size, tgt_dict.index("<brk>"))
                 if len(tgt_ctx_tensor) > 0:
-                    tgt_ctx_tensor = torch.cat(
-                        [tgt_ctx_tensor, torch.tensor([tgt_dict.index("<brk>")])]
-                    )
-                full_tgt = torch.cat(
-                    [tgt_ctx_tensor, tgt, torch.tensor([tgt_dict.eos()])]
-                )
+                    tgt_ctx_tensor = torch.cat([tgt_ctx_tensor, torch.tensor([tgt_dict.index("<brk>")])])
+                full_tgt = torch.cat([tgt_ctx_tensor, tgt, torch.tensor([tgt_dict.eos()])])
                 sample = {"id": 0, "source": full_src, "target": full_tgt}
             else:
                 src_ctx_tensor = create_context(
@@ -258,9 +214,7 @@ def main():
             samples.append(sample)
 
         if concat_model:
-            sample = raw_collate(
-                samples, pad_idx=src_dict.pad(), eos_idx=src_dict.eos()
-            )
+            sample = raw_collate(samples, pad_idx=src_dict.pad(), eos_idx=src_dict.eos())
         else:
             sample = contextual_collate(
                 samples,
@@ -281,12 +235,8 @@ def main():
         # save info for attention visualization
         attentions.append(hyps[most_likely][0]["attention"])
         src_log.append(src_dict.string(samples[most_likely]["source"]) + " <eos>")
-        src_context_log.append(
-            src_dict.string(samples[most_likely]["src_context"]) + " <eos>"
-        )
-        tgt_context_log.append(
-            "<eos> " + tgt_dict.string(samples[most_likely]["tgt_context"])
-        )
+        src_context_log.append(src_dict.string(samples[most_likely]["src_context"]) + " <eos>")
+        tgt_context_log.append("<eos> " + tgt_dict.string(samples[most_likely]["tgt_context"]))
         tgt_log.append("<eos> " + tgt_dict.string(samples[most_likely]["target"]))
 
         bar.update(1)

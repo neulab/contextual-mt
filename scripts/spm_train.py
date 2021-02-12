@@ -48,9 +48,7 @@ def main():
         with open(args.vocab_file, "w") as vocab_f:
             for symbol in args.special_symbols:
                 print(f"{symbol} 0", file=vocab_f)
-            for word, freq in vocab.most_common(
-                args.vocab_size - len(args.special_symbols)
-            ):
+            for word, freq in vocab.most_common(args.vocab_size - len(args.special_symbols)):
                 print(f"{word} {freq}", file=vocab_f)
 
 

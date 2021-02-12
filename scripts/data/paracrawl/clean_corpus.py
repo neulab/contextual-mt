@@ -27,16 +27,12 @@ def main():
     source_out = f"{args.output_pref}.{args.source_lang}"
     target_out = f"{args.output_pref}.{args.target_lang}"
 
-    with open(source_in, "r") as src_in, open(target_in, "r") as tgt_in, open(
-        source_out, "w"
-    ) as src_out, open(target_out, "w") as tgt_out:
+    with open(source_in, "r") as src_in, open(target_in, "r") as tgt_in, open(source_out, "w") as src_out, open(target_out, "w") as tgt_out:
         # read size chunk_size into memory
         while True:
             src_lines, tgt_lines = [], []
             lines_read = 0
-            for src_l, tgt_l in takewhile(
-                lambda _: lines_read <= args.chunk_size, zip(src_in, tgt_in)
-            ):
+            for src_l, tgt_l in takewhile(lambda _: lines_read <= args.chunk_size, zip(src_in, tgt_in)):
                 src_lines.append(src_l[:-1])
                 tgt_lines.append(tgt_l[:-1])
                 lines_read += 1
@@ -48,27 +44,17 @@ def main():
             # apply length filters
             filter_flags = [False for _ in range(len(src_lines))]
 
-            assert len(filter_flags) == len(src_lines) and len(filter_flags) == len(
-                tgt_lines
-            )
+            assert len(filter_flags) == len(src_lines) and len(filter_flags) == len(tgt_lines)
 
             for idx, (src_l, tgt_l) in enumerate(zip(src_lines, tgt_lines)):
-                filter_flags[idx] = filter_flags[idx] or length_filter(
-                    src_l, args.max_length
-                )
-                filter_flags[idx] = filter_flags[idx] or length_filter(
-                    tgt_l, args.max_length
-                )
+                filter_flags[idx] = filter_flags[idx] or length_filter(src_l, args.max_length)
+                filter_flags[idx] = filter_flags[idx] or length_filter(tgt_l, args.max_length)
 
             # apply langid filters
             src_labels = model.predict(src_lines)
             tgt_labels = model.predict(tgt_lines)
             for idx, (src_lbl, tgt_lbl) in enumerate(zip(src_labels, tgt_labels)):
-                filter_flags[idx] = (
-                    filter_flags[idx]
-                    or (src_lbl != f"__{args.source_lang}__")
-                    or (tgt_lbl != f"__{args.target_lang}__")
-                )
+                filter_flags[idx] = filter_flags[idx] or (src_lbl != f"__{args.source_lang}__") or (tgt_lbl != f"__{args.target_lang}__")
 
             for filter_f, src_l, tgt_l in zip(filter_flags, src_lines, tgt_lines):
                 if not filter_f:

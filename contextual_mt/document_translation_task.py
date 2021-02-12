@@ -56,16 +56,10 @@ class DocumentTranslationTask(TranslationTask):
                 "to disable detokenization, e.g., when using sentencepiece)"
             )
             detok_args = json.loads(getattr(args, "eval_bleu_detok_args", "{}") or "{}")
-            self.tokenizer = encoders.build_tokenizer(
-                Namespace(
-                    tokenizer=getattr(args, "eval_bleu_detok", None), **detok_args
-                )
-            )
+            self.tokenizer = encoders.build_tokenizer(Namespace(tokenizer=getattr(args, "eval_bleu_detok", None), **detok_args))
 
             gen_args = json.loads(getattr(args, "eval_bleu_args", "{}") or "{}")
-            self.sequence_generator = self.build_generator(
-                [model], Namespace(**gen_args), seq_gen_cls=ContextualSequenceGenerator
-            )
+            self.sequence_generator = self.build_generator([model], Namespace(**gen_args), seq_gen_cls=ContextualSequenceGenerator)
         return model
 
     def load_dataset(self, split, epoch=1, combine=False, **kwargs):
@@ -75,9 +69,7 @@ class DocumentTranslationTask(TranslationTask):
         """
 
         def split_exists(split, src, tgt, lang, data_path):
-            filename = os.path.join(
-                data_path, "{}.{}-{}.{}".format(split, src, tgt, lang)
-            )
+            filename = os.path.join(data_path, "{}.{}-{}.{}".format(split, src, tgt, lang))
             return indexed_dataset.dataset_exists(filename, impl=self.args.dataset_impl)
 
         paths = utils.split_paths(self.args.data)
@@ -95,16 +87,10 @@ class DocumentTranslationTask(TranslationTask):
         elif split_exists(split, tgt, src, src, data_path):
             prefix = os.path.join(data_path, "{}.{}-{}.".format(split, tgt, src))
         else:
-            raise FileNotFoundError(
-                "Dataset not found: {} ({})".format(split, data_path)
-            )
+            raise FileNotFoundError("Dataset not found: {} ({})".format(split, data_path))
 
-        src_dataset = data_utils.load_indexed_dataset(
-            prefix + src, self.src_dict, self.args.dataset_impl
-        )
-        tgt_dataset = data_utils.load_indexed_dataset(
-            prefix + tgt, self.tgt_dict, self.args.dataset_impl
-        )
+        src_dataset = data_utils.load_indexed_dataset(prefix + src, self.src_dict, self.args.dataset_impl)
+        tgt_dataset = data_utils.load_indexed_dataset(prefix + tgt, self.tgt_dict, self.args.dataset_impl)
         with open(prefix + "docids", "r") as f:
             doc_ids = [int(idx) for idx in f]
 
@@ -117,10 +103,7 @@ class DocumentTranslationTask(TranslationTask):
                 pos_tags = [line.strip().split(" ") for line in f]
         pos_drop_probs = None
         if self.args.pos_drop_probs is not None:
-            pos_drop_probs = {
-                p.split(":")[0]: float(p.split(":")[1])
-                for p in self.args.pos_drop_probs
-            }
+            pos_drop_probs = {p.split(":")[0]: float(p.split(":")[1]) for p in self.args.pos_drop_probs}
 
         self.datasets[split] = ContextualDataset(
             src_dataset,
