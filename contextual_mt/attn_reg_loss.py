@@ -66,7 +66,7 @@ class AttentionLoss(FairseqCriterion):
         self.ignore_prefix_size = ignore_prefix_size
         self.report_accuracy = report_accuracy
         self.regularize_heads = task.args.regularize_heads
-        self.l = task.args.kl_lambda
+        self.lamb = task.args.kl_lambda
         self.reg_attn = task.args.regularize_attention
         self.enc_alignment_layer = task.args.enc_alignment_layer
         self.cross_alignment_layer = task.args.cross_alignment_layer
@@ -254,18 +254,18 @@ class AttentionLoss(FairseqCriterion):
         if cross_attn_loss != 0:
             logging_output["cross_attn_mean"] = cross_attn_mean.data
             logging_output["cross_attn_loss"] = cross_attn_loss.data
-            attn_loss += self.l * cross_attn_loss
+            attn_loss += self.lamb * cross_attn_loss
 
         if self_attn_loss != 0:
             logging_output["self_attn_mean"] = self_attn_mean.data
             logging_output["self_attn_loss"] = self_attn_loss.data
-            attn_loss += self.l * self_attn_loss
+            attn_loss += self.lamb * self_attn_loss
 
         if enc_attn_loss != 0:
             logging_output["enc_attn_mean"] = enc_attn_mean.data
             logging_output["enc_attn_loss"] = enc_attn_loss.data
 
-            attn_loss += self.l * enc_attn_loss
+            attn_loss += self.lamb * enc_attn_loss
 
         logging_output["attn_loss"] = attn_loss.data if attn_loss != 0 else 0
         loss += attn_loss
