@@ -63,6 +63,8 @@ fairseq-preprocess \
     --destdir ${data_dir}/bin
 ```
 
+In addition, this repo already includes some scripts to preprocess some dataset. Please refer to `scripts/data`
+
 ## Training
 
 ### Document-level translation
@@ -143,7 +145,20 @@ python scripts/score.py ${predictions_dir}/test.pred.tgt ${data_dir}/test.tgt \
 
 ## Measuring CXMI
 
-To measure the CXMI for a model for different context sizes, please refer to the notebook `notebooks/measuring_context_usage.ipynb`
+To measure the CXMI for a model with a specific context size, run:
+
+```bash
+python contextual_mt/docmt_cxmi.py \
+    --path $checkpoint_dir \
+    --source-lang src --target-lang tgt \
+    --source-file ${data_dir}/test.src \
+    --reference-file ${data_idr}/test.tgt \
+    --docids-file ${data_dir}/test.docids \
+    --source-context-size $N \
+    --target-context-isze $M
+```
+
+For the more detailed analyises, please refer to the notebook `notebooks/measuring_context_usage.ipynb`
 
 ## Contrastive evaluation
 

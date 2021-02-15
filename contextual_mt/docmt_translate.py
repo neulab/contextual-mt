@@ -12,17 +12,15 @@ import contextual_mt  # noqa: F401
 from contextual_mt.contextual_dataset import collate
 from contextual_mt import ContextualSequenceGenerator
 
-from contextual_mt.utils import encode, decode, create_context
+from contextual_mt.utils import encode, decode, create_context, parse_documents
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--source-file", required=True, help="file to be translated")
-    parser.add_argument("--docids-file", required=True, help="file to be translated")
+    parser.add_argument("--docids-file", required=True, help="file with document ids")
     parser.add_argument(
-        "--predictions-file",
-        required=True,
-        help="reference file, used if with --gold-target-context",
+        "--predictions-file", required=True, help="file to save the predictions"
     )
     parser.add_argument(
         "--reference-file",
@@ -128,14 +126,7 @@ def main():
     else:
         refs = [None for _ in srcs]
 
-    # parse lines into list of documents
-    documents = []
-    prev_docid = None
-    for src_l, tgt_l, idx in zip(srcs, refs, docids):
-        if prev_docid != idx:
-            documents.append([])
-        prev_docid = idx
-        documents[-1].append((src_l, tgt_l))
+    documents = parse_documents(srcs, refs, docids)
 
     preds = []
     ids = []
