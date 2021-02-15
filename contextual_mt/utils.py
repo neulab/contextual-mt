@@ -23,3 +23,15 @@ def create_context(sentences, context_size, break_id=None, eos_id=None):
     if eos_id is not None:
         context.append(torch.tensor([eos_id]))
     return torch.cat(context) if context else torch.tensor([]).long()
+
+
+def parse_documents(srcs, refs, docids):
+    # parse lines into list of documents
+    documents = []
+    prev_docid = None
+    for src_l, tgt_l, idx in zip(srcs, refs, docids):
+        if prev_docid != idx:
+            documents.append([])
+        prev_docid = idx
+        documents[-1].append((src_l, tgt_l))
+    return documents
