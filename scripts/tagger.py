@@ -63,13 +63,14 @@ class Tagger(abc.ABC):
         ctx_doc = self.tagger(context)
         prev_tenses = []
         for tok in ctx_doc:
-            if tok.tag_ == "VERB":
+            if tok.pos_ == "VERB":
+                breakpoint()
                 vform = tok.morph.get("VerbForm")
                 if vform is not None:
                     prev_tenses.append(vform)
         cur_tenses = dict()
         for tok in cur_doc:
-            if tok.tag_ == "VERB":
+            if tok.pos_ == "VERB":
                 cur_tenses[self._normalize(tok.text)] = tok.morph.get("VerbForm")
 
         tags = []
