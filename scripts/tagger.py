@@ -64,7 +64,6 @@ class Tagger(abc.ABC):
         prev_tenses = []
         for tok in ctx_doc:
             if tok.pos_ == "VERB":
-                breakpoint()
                 vform = tok.morph.get("VerbForm")
                 if vform is not None:
                     prev_tenses.append(vform)
