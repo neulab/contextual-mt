@@ -314,10 +314,6 @@ def build_tagger(lang) -> Tagger:
     }
     return taggers[lang]()
 
-
-# TODO: ja, zh_tw, zh_cn taggers - need to add tokenizer. Something weird happens with ar and ko tokenization too
-
-
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--source-file", required=True, help="file to be translated")
