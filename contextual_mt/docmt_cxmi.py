@@ -151,8 +151,8 @@ def main():
         "--path", required=True, metavar="FILE", help="path to model file"
     )
 
-    parser.add_argument("--source-context-size", default=None)
-    parser.add_argument("--target-context-size", default=None)
+    parser.add_argument("--source-context-size", type=int, default=None)
+    parser.add_argument("--target-context-size", type=int, default=None)
     parser.add_argument(
         "--batch-size",
         type=int,
