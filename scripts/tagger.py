@@ -10,7 +10,7 @@ class Tagger(abc.ABC):
     def __init__(self):
         self.tagger = None
         self.formality_classes = {}
-        self.src_neutral_pronouns = ["it", "they"]
+        self.src_neutral_pronouns = ["it", "they", "you", "I"]
         self.tgt_gendered_pronouns = None
 
     def _normalize(self, word):
@@ -155,8 +155,10 @@ class SpanishTagger(Tagger):
             "v_class": {"usted", "vosotros", "vuestro", "vuestra", "vuestras", "os"},
         }
         from spacy.lang.es.stop_words import STOP_WORDS
+        self.tgt_gendered_pronouns = ["él", "ella", "ellos", "ellas"]
 
         self.stop_words = STOP_WORDS
+        self.tagger = spacy.load("es_core_news_sm")
 
 
 class HebrewTagger(Tagger):
@@ -165,7 +167,6 @@ class HebrewTagger(Tagger):
         # TODO: hebrew has t-v distinction only in extreme formality cases
         
         from spacy.lang.he.stop_words import STOP_WORDS
-
         self.stop_words = STOP_WORDS
 
 
@@ -210,7 +211,7 @@ class RomanianTagger(Tagger):
             },
         }
         from spacy.lang.ro.stop_words import STOP_WORDS
-
+        self.tgt_gendered_pronouns = ["el", "ei", "ea", "ele"]
         self.stop_words = STOP_WORDS
 
 
@@ -234,6 +235,8 @@ class ArabicTagger(Tagger):
 
         self.stop_words = STOP_WORDS
 
+        self.tgt_gendered_pronouns = ["هم", "هن", "أنتم", "أنتن", "انتَ", "انتِ", "هو", "هي"]
+
 
 class ItalianTagger(Tagger):
     def __init__(self):
@@ -245,11 +248,16 @@ class ItalianTagger(Tagger):
         from spacy.lang.it.stop_words import STOP_WORDS
 
         self.stop_words = STOP_WORDS
+        self.tgt_gendered_pronouns = ["esso", "essa"]
 
 
 class KoreanTagger(Tagger):
     def __init__(self):
         super().__init__()
+        self.formality_classes = {
+            "t_class": {"저", "tuo", "tua", "tuoi"},
+            "v_class": {"lei", "suo", "sua", "suoi"},
+        }
         
         from spacy.lang.ko.stop_words import STOP_WORDS
 
@@ -259,10 +267,17 @@ class KoreanTagger(Tagger):
 class JapaneseTagger(Tagger):
     def __init__(self):
         super().__init__()
+        # Formality verb forms from https://www.aclweb.org/anthology/D19-5203.pdf adapted to stanza tokens
+        self.formality_classes = {
+            "t_class": {"だ", "だっ", "じゃ", "だろう", "だ", "だけど", "だっ"},
+            "v_class": {"ござい", "ます", "いらっしゃれ", "いらっしゃい", "ご覧", "伺い", "伺っ", "存知"},
+        }
         
         from spacy.lang.ja.stop_words import STOP_WORDS
 
         self.stop_words = STOP_WORDS
+
+        self.tgt_gendered_pronouns = ["私", "僕", "俺"]
 
 
 class ChineseTagger(Tagger):
@@ -272,6 +287,11 @@ class ChineseTagger(Tagger):
         from spacy.lang.zh.stop_words import STOP_WORDS
 
         self.stop_words = STOP_WORDS
+
+        self.formality_classes = {
+            "t_class": {"你"},
+            "v_class": {"您"},
+        }
 
 
 class TaiwaneseTagger(Tagger):
@@ -357,18 +377,20 @@ def main():
             ellipsis_tags = tagger.ellipsis(source, target, align)
             tags = []
             for i in range(len(lexical_tags)):
+                tag = []
                 if pronouns_tags[i]:
-                    tags.append("pronouns")
-                elif formality_tags[i]:
-                    tags.append("formality")
-                elif tense_cohesion_tags[i]:
-                    tags.append("verbe_tense")
-                elif ellipsis_tags[i]:
-                    tags.append("ellipsis")
-                elif lexical_tags[i]:
-                    tags.append("lexical")
-                else:
-                    tags.append("other")
+                    tag.append("pronouns")
+                if formality_tags[i]:
+                    tag.append("formality")
+                if tense_cohesion_tags[i]:
+                    tag.append("verb_tense")
+                if ellipsis_tags[i]:
+                    tag.append("ellipsis")
+                if lexical_tags[i]:
+                    tag.append("lexical")
+                if len(tag) == 0:
+                    tag.append("other")
+                tags.append("+".join(tag))
 
             print(" ".join(tags), file=output_file)
 
