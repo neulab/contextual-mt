@@ -3,6 +3,7 @@ import abc
 import argparse
 import spacy
 
+en_tagger = spacy.load("en_core_web_sm")
 
 class Tagger(abc.ABC):
     """ Abstact class that represent a tagger for a language """
@@ -17,8 +18,9 @@ class Tagger(abc.ABC):
         """ default normalization """
         return re.sub(r"^\W+|\W+$", "", word.lower())
 
-    def formality_tags(self, current, context):
+    def formality_tags(self, cur_src, ctx_src, cur_tgt, ctx_tgt, cur_align, ctx_align):
         ctx_formality = None
+        context = " ".join(ctx_tgt)
         for word in context.split(" "):
             word = self._normalize(word)
             for formality, class_words in self.formality_classes.items():
@@ -30,18 +32,25 @@ class Tagger(abc.ABC):
 
         # in case of undefined formality just return everything false
         if ctx_formality is None or ctx_formality == "ambiguous":
-            return [False for _ in current.split(" ")]
+            return [False for _ in cur_tgt.split(" ")]
 
         # TODO: shouldn't we penalize words that are in the wrong formality class?
         tags = []
-        for word in current.split(" "):
+        for word in cur_tgt.split(" "):
             word = self._normalize(word)
             tags.append(word in self.formality_classes[ctx_formality])
 
-        assert len(tags) == len(current.split(" "))
-        return tags
+        assert len(tags) == len(cur_tgt.split(" "))
+
+        try: 
+            tags2 = self.verb_formality(cur_src, ctx_src, cur_tgt, ctx_tgt, cur_align, ctx_align)
+            assert len(tags2) == len(cur_tgt.split(" "))
+            return [a or b for a,b in zip(tags, tags2)]
+        except:
+            return tags
 
     def lexical_cohesion(self, current, context):
+        context = " ".join(context)
         tags = []
         context_words = map(self._normalize, context.split(" "))
         for word in current.split(" "):
@@ -55,9 +64,10 @@ class Tagger(abc.ABC):
         return tags
 
     def tense_cohesion(self, current, context):
-        # if there is no tagger, we just pass everything false
+        context = " ".join(context)
+        # if there is no tagger, use multilingual tagger
         if self.tagger is None:
-            return [False for _ in current.split(" ")]
+            self.tagger = spacy.load("xx_ent_wiki_sm")
 
         cur_doc = self.tagger(current)
         ctx_doc = self.tagger(context)
@@ -160,6 +170,58 @@ class SpanishTagger(Tagger):
         self.stop_words = STOP_WORDS
         self.tagger = spacy.load("es_core_news_sm")
 
+    def verb_formality(self, cur_src, ctx_src, cur_tgt, ctx_tgt, cur_align, ctx_align):
+        ctx_formality = None
+        tags = [False for _ in cur_tgt.split(" ")]
+        
+        for i, c_align in enumerate(ctx_align):
+            src_doc = en_tagger(ctx_src[i])
+            tgt_doc = self.tagger(ctx_tgt[i])
+            align = {self._normalize(ctx_src[i].split(" ")[s]) : self._normalize(ctx_tgt[i].split(" ")[t]) for s,t in c_align.items()}
+
+            you_verbs = []
+            for tok in src_doc:
+                if self._normalize(tok.text) == "you" and tok.dep_ == "nsubj":
+                    you_verbs.append(self._normalize(tok.head.text))
+            you_verbs = list(map(lambda x: self._normalize(align.get(x, "<NONE>")), you_verbs))
+
+            for tok in tgt_doc:
+                if self._normalize(tok.text) in you_verbs:
+                    if '2' in tok.morph.get("Person"):
+                        ctx_formality = "t_class" if ctx_formality is None else "ambiguous"
+                    elif '3' in tok.morph.get("Person"):
+                        ctx_formality = "v_class" if ctx_formality is None else "ambiguous"
+                if ctx_formality == "ambiguous":
+                    break
+
+        # in case of undefined formality just return everything false
+        if ctx_formality is None or ctx_formality == "ambiguous":
+            return tags
+
+        src_doc = en_tagger(cur_src)
+        tgt_doc = self.tagger(cur_tgt)
+        align = {self._normalize(cur_src.split(" ")[s]) : self._normalize(cur_tgt.split(" ")[t]) for s,t in cur_align.items()}
+        you_verbs = []
+        for tok in src_doc:
+            if self._normalize(tok.text) == "you" and tok.dep_ == "nsubj":
+                you_verbs.append(self._normalize(tok.head.text))
+        you_verbs = list(map(lambda x: align.get(x), you_verbs))
+        
+        cur_tgt = cur_tgt.split(" ")
+        for tok in tgt_doc:
+            if self._normalize(tok.text) in you_verbs:
+                if '2' in tok.morph.get("Person") and ctx_formality == "t_class": 
+                    try:
+                        tags[cur_tgt.index(tok.text)] = True 
+                    except:
+                        pass 
+                if '3' in tok.morph.get("Person") and ctx_formality == "v_class": 
+                    try:
+                        tags[cur_tgt.index(tok.text)] = True 
+                    except:
+                        pass 
+        return tags
+
 
 class HebrewTagger(Tagger):
     def __init__(self):
@@ -181,6 +243,7 @@ class DutchTagger(Tagger):
         from spacy.lang.nl.stop_words import STOP_WORDS
 
         self.stop_words = STOP_WORDS
+        self.tagger = spacy.load("nl_core_news_sm")
 
 
 class RomanianTagger(Tagger):
@@ -213,6 +276,7 @@ class RomanianTagger(Tagger):
         from spacy.lang.ro.stop_words import STOP_WORDS
         self.tgt_gendered_pronouns = ["el", "ei", "ea", "ele"]
         self.stop_words = STOP_WORDS
+        self.tagger = spacy.load("ro_core_news_sm")
 
 
 class TurkishTagger(Tagger):
@@ -249,7 +313,59 @@ class ItalianTagger(Tagger):
 
         self.stop_words = STOP_WORDS
         self.tgt_gendered_pronouns = ["esso", "essa"]
+        self.tagger = spacy.load("it_core_news_sm")
 
+    def verb_formality(self, cur_src, ctx_src, cur_tgt, ctx_tgt, cur_align, ctx_align):
+        ctx_formality = None
+        tags = [False for _ in cur_tgt.split(" ")]
+        
+        for i, c_align in enumerate(ctx_align):
+            src_doc = en_tagger(ctx_src[i])
+            tgt_doc = self.tagger(ctx_tgt[i])
+            align = {self._normalize(ctx_src[i].split(" ")[s]) : self._normalize(ctx_tgt[i].split(" ")[t]) for s,t in c_align.items()}
+
+            you_verbs = []
+            for tok in src_doc:
+                if self._normalize(tok.text) == "you" and tok.dep_ == "nsubj":
+                    you_verbs.append(self._normalize(tok.head.text))
+            you_verbs = list(map(lambda x: self._normalize(align.get(x, "<NONE>")), you_verbs))
+
+            for tok in tgt_doc:
+                if self._normalize(tok.text) in you_verbs:
+                    if '2' in tok.morph.get("Person"):
+                        ctx_formality = "t_class" if ctx_formality is None else "ambiguous"
+                    elif '3' in tok.morph.get("Person"):
+                        ctx_formality = "v_class" if ctx_formality is None else "ambiguous"
+                if ctx_formality == "ambiguous":
+                    break
+
+        # in case of undefined formality just return everything false
+        if ctx_formality is None or ctx_formality == "ambiguous":
+            return tags
+
+        src_doc = en_tagger(cur_src)
+        tgt_doc = self.tagger(cur_tgt)
+        align = {self._normalize(cur_src.split(" ")[s]) : self._normalize(cur_tgt.split(" ")[t]) for s,t in cur_align.items()}
+        you_verbs = []
+        for tok in src_doc:
+            if self._normalize(tok.text) == "you" and tok.dep_ == "nsubj":
+                you_verbs.append(self._normalize(tok.head.text))
+        you_verbs = list(map(lambda x: align.get(x), you_verbs))
+        
+        cur_tgt = cur_tgt.split(" ")
+        for tok in tgt_doc:
+            if self._normalize(tok.text) in you_verbs:
+                if '2' in tok.morph.get("Person") and ctx_formality == "t_class": 
+                    try:
+                        tags[cur_tgt.index(tok.text)] = True 
+                    except:
+                        pass 
+                if '3' in tok.morph.get("Person") and ctx_formality == "v_class": 
+                    try:
+                        tags[cur_tgt.index(tok.text)] = True 
+                    except:
+                        pass 
+        return tags
 
 class KoreanTagger(Tagger):
     def __init__(self):
@@ -278,6 +394,7 @@ class JapaneseTagger(Tagger):
         self.stop_words = STOP_WORDS
 
         self.tgt_gendered_pronouns = ["私", "僕", "俺"]
+        self.tagger = spacy.load("ja_core_news_sm")
 
 
 class ChineseTagger(Tagger):
@@ -292,6 +409,7 @@ class ChineseTagger(Tagger):
             "t_class": {"你"},
             "v_class": {"您"},
         }
+        self.tagger = spacy.load("zh_core_web_sm")
 
 
 class TaiwaneseTagger(Tagger):
@@ -313,6 +431,7 @@ class RussianTagger(Tagger):
         from spacy.lang.ru.stop_words import STOP_WORDS
 
         self.stop_words = STOP_WORDS
+        self.tagger = spacy.load("ru_core_web_sm")
 
 
 def build_tagger(lang) -> Tagger:
@@ -365,19 +484,31 @@ def main():
         for source, target, docid, align in zip(srcs, tgts, docids, alignments):
             if prev_docid is None or docid != prev_docid:
                 prev_docid = docid
+                source_context = []
                 target_context = []
+                align_context = []
 
-            current_tgt_ctx = " ".join(
-                target_context[len(target_context) - args.target_context_size :]
-            )
+            # current_src_ctx = " ".join(
+            #     source_context[len(source_context) - args.source_context_size :]
+            # )
+            # current_tgt_ctx = " ".join(
+            #     target_context[len(target_context) - args.target_context_size :]
+            # )
+            # current_align_ctx = " ".join(
+            #     align_context[len(align_context) - max(args.source_context_size, args.target_context_size) :]
+            # )
+            current_src_ctx = source_context[len(source_context) - args.source_context_size :]
+            current_tgt_ctx = target_context[len(target_context) - args.target_context_size :]
+            current_align_ctx = align_context[len(align_context) - max(args.source_context_size, args.target_context_size) :]
+
             lexical_tags = tagger.lexical_cohesion(target, current_tgt_ctx)
-            formality_tags = tagger.formality_tags(target, current_tgt_ctx)
+            formality_tags = tagger.formality_tags(source, current_src_ctx, target, current_tgt_ctx, align, current_align_ctx)
             tense_cohesion_tags = tagger.tense_cohesion(target, current_tgt_ctx)
             pronouns_tags = tagger.pronouns(source, target, align)
             ellipsis_tags = tagger.ellipsis(source, target, align)
             tags = []
             for i in range(len(lexical_tags)):
-                tag = []
+                tag = ["all"]
                 if pronouns_tags[i]:
                     tag.append("pronouns")
                 if formality_tags[i]:
@@ -394,6 +525,7 @@ def main():
 
             print(" ".join(tags), file=output_file)
 
+            source_context.append(source)
             target_context.append(target)
 
 
