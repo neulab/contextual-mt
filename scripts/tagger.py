@@ -2,8 +2,10 @@ import re
 import abc
 import argparse
 import spacy
+import spacy_stanza
 
-en_tagger = spacy.load("en_core_web_sm")
+#en_tagger = spacy.load("en_core_web_sm")
+en_tagger = spacy_stanza.load_pipeline("en", processors="tokenize,pos,lemma,depparse")
 
 class Tagger(abc.ABC):
     """ Abstact class that represent a tagger for a language """
@@ -115,6 +117,66 @@ class Tagger(abc.ABC):
                     tags[i] = True
         return tags
 
+    def pos_morph(self, current, detok_current):
+        doc = self.tagger(detok_current)
+        tags = []
+        for tok in doc:
+            tag = tok.pos_
+            if tag == "PRON":
+                morph_tags = tok.morph.get('Person') + tok.morph.get('Number')
+                m_tag = ".".join(morph_tags)
+                if len(m_tag) > 0:
+                    tag += "+" + "PRON." + m_tag
+            elif tag == "VERB":
+                m_tag = tok.morph.get("Tense")
+                if len(m_tag) > 0:
+                    tag += "+" + "VERB." + m_tag[0]
+            for _ in tok.text.split(" "):
+                tags.append(tag)
+
+        assert len(tags) == len(current.split(" "))
+        return tags
+
+
+class EnglishTagger(Tagger):
+    def __init__(self):
+        super().__init__()
+
+        from spacy.lang.en.stop_words import STOP_WORDS
+        self.stop_words = STOP_WORDS
+        self.tagger = en_tagger
+
+        self.pronoun_types = {
+            "1sg": {"I", "me", "my", "mine", "myself"},
+            "2": {"you", "your", "yours", "yourself", "yourselves"},
+            "3sgm": {"he", "him", "his", "himself"},
+            "3sgf": {"she", "her", "hers", "herself"},
+            "3sgn": {"it", "its", "itself", "themself"},
+            "1pl": {"we", "us", "our", "ours", "ourselves"},
+            "3pl": {"they", "them", "their", "theirs", "themselves"},
+        }
+
+    def formality_tags(self, cur_src, ctx_src, cur_tgt=None, ctx_tgt=None, cur_align=None, ctx_align=None):
+        #TODO?
+        return [False for _ in cur_src.split(" ")]
+    
+    def pronouns(self, src, ref=None, align=None):
+        src = src.split(" ")
+        tags = []
+        for word in src:
+            word = self._normalize(word)
+            for pro_type, pro_words in self.pronoun_types.items():
+                if word in pro_words:
+                    tags.append(pro_type)
+                else:
+                    tags.append("no_tag")
+        return tags
+
+    def ellipsis(self, src, ref=None, align=None):
+        #TODO?
+        return [False for _ in cur_src.split(" ")]
+
+
 class FrenchTagger(Tagger):
     def __init__(self):
         super().__init__()
@@ -137,8 +199,8 @@ class FrenchTagger(Tagger):
 
         from spacy.lang.fr.stop_words import STOP_WORDS
         self.stop_words = STOP_WORDS
-        self.tagger = spacy.load("fr_core_news_sm")
-
+        #self.tagger = spacy.load("fr_core_news_sm")
+        self.tagger = spacy_stanza.load_pipeline("fr", processors="tokenize,pos,lemma,depparse")
 
 class PortugueseTagger(Tagger):
     def __init__(self):
@@ -153,7 +215,8 @@ class PortugueseTagger(Tagger):
         self.tgt_gendered_pronouns = ["ele", "ela", "eles", "elas"]
 
         self.stop_words = STOP_WORDS
-        self.tagger = spacy.load("pt_core_news_sm")
+        #self.tagger = spacy.load("pt_core_news_sm")
+        self.tagger = spacy_stanza.load_pipeline("pt", processors="tokenize,pos,lemma,depparse")
 
 
 class SpanishTagger(Tagger):
@@ -168,7 +231,8 @@ class SpanishTagger(Tagger):
         self.tgt_gendered_pronouns = ["él", "ella", "ellos", "ellas"]
 
         self.stop_words = STOP_WORDS
-        self.tagger = spacy.load("es_core_news_sm")
+        #self.tagger = spacy.load("es_core_news_sm")
+        self.tagger = spacy_stanza.load_pipeline("es", processors="tokenize,pos,lemma,depparse")
 
     def verb_formality(self, cur_src, ctx_src, cur_tgt, ctx_tgt, cur_align, ctx_align):
         ctx_formality = None
@@ -230,6 +294,7 @@ class HebrewTagger(Tagger):
         
         from spacy.lang.he.stop_words import STOP_WORDS
         self.stop_words = STOP_WORDS
+        self.tagger = spacy_stanza.load_pipeline("he", processors="tokenize,pos,lemma,depparse")
 
 
 class DutchTagger(Tagger):
@@ -243,7 +308,8 @@ class DutchTagger(Tagger):
         from spacy.lang.nl.stop_words import STOP_WORDS
 
         self.stop_words = STOP_WORDS
-        self.tagger = spacy.load("nl_core_news_sm")
+        #self.tagger = spacy.load("nl_core_news_sm")
+        self.tagger = spacy_stanza.load_pipeline("nl", processors="tokenize,pos,lemma,depparse")
 
 
 class RomanianTagger(Tagger):
@@ -276,7 +342,8 @@ class RomanianTagger(Tagger):
         from spacy.lang.ro.stop_words import STOP_WORDS
         self.tgt_gendered_pronouns = ["el", "ei", "ea", "ele"]
         self.stop_words = STOP_WORDS
-        self.tagger = spacy.load("ro_core_news_sm")
+        #self.tagger = spacy.load("ro_core_news_sm")
+        self.tagger = spacy_stanza.load_pipeline("ro", processors="tokenize,pos,lemma,depparse")
 
 
 class TurkishTagger(Tagger):
@@ -289,6 +356,7 @@ class TurkishTagger(Tagger):
         from spacy.lang.tr.stop_words import STOP_WORDS
 
         self.stop_words = STOP_WORDS
+        self.tagger = spacy_stanza.load_pipeline("tr", processors="tokenize,pos,lemma,depparse")
 
 
 class ArabicTagger(Tagger):
@@ -300,6 +368,7 @@ class ArabicTagger(Tagger):
         self.stop_words = STOP_WORDS
 
         self.tgt_gendered_pronouns = ["هم", "هن", "أنتم", "أنتن", "انتَ", "انتِ", "هو", "هي"]
+        self.tagger = spacy_stanza.load_pipeline("ar", processors="tokenize,pos,lemma,depparse")
 
 
 class ItalianTagger(Tagger):
@@ -313,7 +382,8 @@ class ItalianTagger(Tagger):
 
         self.stop_words = STOP_WORDS
         self.tgt_gendered_pronouns = ["esso", "essa"]
-        self.tagger = spacy.load("it_core_news_sm")
+        #self.tagger = spacy.load("it_core_news_sm")
+        self.tagger = spacy_stanza.load_pipeline("it", processors="tokenize,pos,lemma,depparse")
 
     def verb_formality(self, cur_src, ctx_src, cur_tgt, ctx_tgt, cur_align, ctx_align):
         ctx_formality = None
@@ -378,6 +448,7 @@ class KoreanTagger(Tagger):
         from spacy.lang.ko.stop_words import STOP_WORDS
 
         self.stop_words = STOP_WORDS
+        self.tagger = spacy_stanza.load_pipeline("ko", processors="tokenize,pos,lemma,depparse")
 
 
 class JapaneseTagger(Tagger):
@@ -394,7 +465,8 @@ class JapaneseTagger(Tagger):
         self.stop_words = STOP_WORDS
 
         self.tgt_gendered_pronouns = ["私", "僕", "俺"]
-        self.tagger = spacy.load("ja_core_news_sm")
+        #self.tagger = spacy.load("ja_core_news_sm")
+        self.tagger = spacy_stanza.load_pipeline("ja", processors="tokenize,pos,lemma,depparse")
 
 
 class ChineseTagger(Tagger):
@@ -409,7 +481,8 @@ class ChineseTagger(Tagger):
             "t_class": {"你"},
             "v_class": {"您"},
         }
-        self.tagger = spacy.load("zh_core_web_sm")
+        #self.tagger = spacy.load("zh_core_web_sm")
+        self.tagger = spacy_stanza.load_pipeline("zh", processors="tokenize,pos,lemma,depparse")
 
 
 class TaiwaneseTagger(Tagger):
@@ -419,6 +492,7 @@ class TaiwaneseTagger(Tagger):
         from spacy.lang.zh.stop_words import STOP_WORDS
 
         self.stop_words = STOP_WORDS
+        self.tagger = spacy_stanza.load_pipeline("zh", processors="tokenize,pos,lemma,depparse")
 
 
 class RussianTagger(Tagger):
@@ -431,11 +505,13 @@ class RussianTagger(Tagger):
         from spacy.lang.ru.stop_words import STOP_WORDS
 
         self.stop_words = STOP_WORDS
-        self.tagger = spacy.load("ru_core_web_sm")
+        #self.tagger = spacy.load("ru_core_web_sm")
+        self.tagger = spacy_stanza.load_pipeline("ru", processors="tokenize,pos,lemma,depparse")
 
 
 def build_tagger(lang) -> Tagger:
     taggers = {
+        "en": EnglishTagger,
         "fr": FrenchTagger,
         "pt_br": PortugueseTagger,
         "es": SpanishTagger,
@@ -470,6 +546,10 @@ def main():
         srcs = [line.strip() for line in src_f]
     with open(args.target_file, "r") as tgt_f:
         tgts = [line.strip() for line in tgt_f]
+    with open(args.source_file.replace("tok", "detok"), "r") as src_f:
+        detok_srcs = [line.strip() for line in src_f]
+    with open(args.target_file.replace("tok", "detok"), "r") as tgt_f:
+        detok_tgts = [line.strip() for line in tgt_f]
     with open(args.docids_file, "r") as docids_f:
         docids = [idx for idx in docids_f]
     with open(args.alignments_file, "r") as file:
@@ -481,7 +561,7 @@ def main():
 
     prev_docid = None
     with open(args.output, "w") as output_file:
-        for source, target, docid, align in zip(srcs, tgts, docids, alignments):
+        for source, target, detok_src, detok_tgt, docid, align in zip(srcs, tgts, detok_srcs, detok_tgts, docids, alignments):
             if prev_docid is None or docid != prev_docid:
                 prev_docid = docid
                 source_context = []
@@ -506,6 +586,7 @@ def main():
             tense_cohesion_tags = tagger.tense_cohesion(target, current_tgt_ctx)
             pronouns_tags = tagger.pronouns(source, target, align)
             ellipsis_tags = tagger.ellipsis(source, target, align)
+            posmorph_tags = tagger.pos_morph(target, detok_tgt)
             tags = []
             for i in range(len(lexical_tags)):
                 tag = ["all"]
@@ -519,8 +600,9 @@ def main():
                     tag.append("ellipsis")
                 if lexical_tags[i]:
                     tag.append("lexical")
-                if len(tag) == 0:
-                    tag.append("other")
+                if len(tag) == 1:
+                    tag.append("no_tag")
+                tag.append(posmorph_tags[i])
                 tags.append("+".join(tag))
 
             print(" ".join(tags), file=output_file)
