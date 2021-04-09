@@ -78,6 +78,8 @@ def main():
         action="store_true",
         help="if set, model will use ground-truth targets as context",
     )
+    parser.add_argument("--source-context-size", default=None, type=int)
+    parser.add_argument("--target-context-size", default=None, type=int)
 
     args = parser.parse_args()
 
@@ -96,8 +98,16 @@ def main():
     # load dict, params and generator from task
     src_dict = pretrained["task"].src_dict
     tgt_dict = pretrained["task"].tgt_dict
-    source_context_size = pretrained["task"].args.source_context_size
-    target_context_size = pretrained["task"].args.target_context_size
+    source_context_size = (
+        pretrained["task"].args.source_context_size
+        if args.source_context_size is None
+        else args.source_context_size
+    )
+    target_context_size = (
+        pretrained["task"].args.target_context_size
+        if args.target_context_size is None
+        else args.target_context_size
+    )
     generator = pretrained["task"].build_generator(
         models, args, seq_gen_cls=ContextualSequenceGenerator
     )
