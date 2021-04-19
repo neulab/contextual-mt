@@ -548,9 +548,12 @@ def main():
 
     tagger = build_tagger(args.target_lang)
 
+    src_docs = en_tagger(detok_srcs)
+    tgt_docs = tagger.tagger(detok_tgts)
+
     prev_docid = None
     with open(args.output, "w") as output_file:
-        for source, target, detok_src, detok_tgt, docid, align in zip(srcs, tgts, detok_srcs, detok_tgts, docids, alignments):
+        for source, target, cur_src_doc, cur_tgt_doc, docid, align in zip(srcs, tgts, src_docs, tgt_docs, docids, alignments):
             if prev_docid is None or docid != prev_docid:
                 prev_docid = docid
                 source_context = []
@@ -571,8 +574,6 @@ def main():
             current_tgt_ctx = target_context[len(target_context) - args.target_context_size :]
             current_align_ctx = align_context[len(align_context) - max(args.source_context_size, args.target_context_size) :]
             
-            cur_src_doc = en_tagger(detok_src)
-            cur_tgt_doc = tagger.tagger(detok_tgt)
             #assert len(cur_src_doc) == len(source.split(" "))
             #assert len(cur_tgt_doc) == len(target.split(" "))
 
