@@ -103,7 +103,7 @@ fairseq-train \
     --source-context-size $N --target-context-size $M \
     --source-lang en --target-lang fr \
     --log-interval 10 \
-    --arch contextual_transformer --share-decoder-input-output-embed  \
+    --arch attn_reg_transformer --share-decoder-input-output-embed  \
     --optimizer adam --adam-betas '(0.9, 0.98)' --clip-norm 0.1 \
     --lr 5e-4 --lr-scheduler inverse_sqrt  --warmup-updates 4000 \
     --criterion attention_loss --label-smoothing 0.1 --dropout 0.3 --weight-decay 0.0001 \
