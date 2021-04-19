@@ -20,7 +20,7 @@ def main():
             lang = args.lang.split("_")[0] if args.lang != "zh_tw" else  "zh-hant"
             tokenize = spacy_stanza.load_pipeline(lang, processors='tokenize')
             for line in lines:
-                detok = detokenize(line.split())
+                detok = detokenize(line.split()) if lang != "ko" else line
                 doc = tokenize(detok)
                 line = " ".join([token.text for token in doc])
                 print(detok, file=detok_output_file)
