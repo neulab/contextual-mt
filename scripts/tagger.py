@@ -548,8 +548,8 @@ def main():
 
     tagger = build_tagger(args.target_lang)
 
-    src_docs = en_tagger(detok_srcs)
-    tgt_docs = tagger.tagger(detok_tgts)
+    src_docs = en_tagger.pipe(detok_srcs)
+    tgt_docs = tagger.tagger.pipe(detok_tgts)
 
     prev_docid = None
     with open(args.output, "w") as output_file:
