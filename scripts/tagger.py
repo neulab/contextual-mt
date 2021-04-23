@@ -68,7 +68,7 @@ class Tagger(abc.ABC):
     def verb_form(self, cur_doc):
         tags = []
         for tok in cur_doc:
-            if tok.pos_ == "VERB" and (tok.morph.get("VerbForm") in self.ambiguous_verbform or len(self.ambiguous_verbform) == 0):
+            if tok.pos_ == "VERB" and (len([a for a in tok.morph.get("Tense") if a in self.ambiguous_verbform]) > 0 or len(self.ambiguous_verbform) == 0):
                 for _ in tok.text.split(" "):
                     tags.append(True)
             else:
@@ -90,14 +90,13 @@ class Tagger(abc.ABC):
                 tags[r] = True
         return tags
 
-    def ellipsis(self, src, ref, align):
-        src = src.split(" ")
-        ref = ref.split(" ")
+    def ellipsis(self, ref, align):
+        ref = [tok for tok in ref for _ in tok.text.split(" ")]
         tags = [False] * len(ref)
-        for i in range(len(ref)):
+        for i, tok in enumerate(ref):
             if i not in align.values():
-                word = self._normalize(ref[i])
-                if word not in self.stop_words and len(word) > 0:
+                word = self._normalize(tok.text)
+                if word not in self.stop_words and (tok.pos_ in ["NOUN", "VERB", "PROPN"]):
                     tags[i] = True
         return tags
 
@@ -193,6 +192,7 @@ class FrenchTagger(Tagger):
         self.ambiguous_pronouns = {
             "it": ["il", "elle"],
             "they": ["ils", "elles"],
+            "you": ["tu", "vous"],
         }
         self.ambiguous_verbform = ["Pqp", "Imp", "Fut"]
 
@@ -524,6 +524,7 @@ def main():
     parser.add_argument("--target-file", required=True, help="file to be translated")
     parser.add_argument("--docids-file", required=True, help="file with document ids")
     parser.add_argument("--alignments-file", required=True, help="file with word alignments")
+    parser.add_argument("--polysemous-file", required=True, help="file with polysemous words")
     parser.add_argument("--source-lang", default=None)
     parser.add_argument("--target-lang", required=True)
     parser.add_argument("--source-context-size", type=int, default=None)
@@ -543,6 +544,8 @@ def main():
         docids = [idx for idx in docids_f]
     with open(args.alignments_file, "r") as file:
         alignments = file.readlines()
+    with open(args.polysemous_file, "r") as file:
+        polysemous_words = [line.strip() for line in file]
 
     alignments = list(map(lambda x: dict(list(map(lambda y: list(map(int,y.split("-"))), x.strip().split(" ")))), alignments))
 
@@ -581,8 +584,9 @@ def main():
             formality_tags = tagger.formality_tags(source, cur_src_doc, target, cur_tgt_doc, align)
             verb_tags = tagger.verb_form(cur_tgt_doc)
             pronouns_tags = tagger.pronouns(source, target, align)
-            ellipsis_tags = tagger.ellipsis(source, target, align)
+            ellipsis_tags = tagger.ellipsis(cur_tgt_doc, align)
             posmorph_tags = tagger.pos_morph(target, cur_tgt_doc)
+            polysemous_tags = tagger.polysemous(cur_src_doc, target, align, polysemous_words)
             #ner_tags = tagger.ner(detok_tgt_doc)
             tags = []
             for i in range(len(lexical_tags)):
@@ -597,6 +601,8 @@ def main():
                     tag.append("ellipsis")
                 if lexical_tags[i]:
                     tag.append("lexical")
+                if polysemous_tags[i]:
+                    tag.append("polysemous")
                 if len(tag) == 1:
                     tag.append("no_tag")
                 tag.append(posmorph_tags[i])

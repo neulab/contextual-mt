@@ -57,7 +57,7 @@ def main():
         for lemma in poly_lemmas:
             file.write(f"{lemma}\n")
     with open(args.output + ".json", "w") as file:
-        json.dump(poly_lemmas, file)
+        json.dump(src_aligned_tgt, file)
 
 
             
