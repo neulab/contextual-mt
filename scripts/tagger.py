@@ -52,8 +52,8 @@ class Tagger(abc.ABC):
     #     return tags
 
     def lexical_cohesion(self, src_doc, tgt_doc, align, cohesion_words):
-        src_lemmas = [t if not tok.is_stop and not tok.is_punct else None for tok in src_doc for t in tok.lemma_.split(" ")]
-        tgt_lemmas = [t if not tok.is_stop and not tok.is_punct else None for tok in tgt_doc for t in tok.lemma_.split(" ")]
+        src_lemmas = [t if not tok.is_stop and not tok.is_punct else None for tok in src_doc for t in tok.text.split(" ")]
+        tgt_lemmas = [t if not tok.is_stop and not tok.is_punct else None for tok in tgt_doc for t in tok.text.split(" ")]
         tags = [False] * len(tgt_lemmas)
 
         for s, t in align.items():
