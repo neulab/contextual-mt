@@ -1,0 +1,61 @@
+global {
+    ducttape_output="/projects/tir4/users/pfernand/ted-cxmi-experiments-with-de"
+    ducttape_experimental_imports=true
+    ducttape_experimental_submitters=true
+
+    repo="/home/pfernand/repos/contextual-mt"
+    data_dir=/projects/tir1/corpora/dialogue_mt/ted-talks-with-de
+    comet_dir=/projects/tir1/users/pfernand/comet/
+
+    src_lang="en"
+    tgt_lang=(
+        TgtLang: 
+            ru="ru"
+            ja="ja"
+            zh_cn="zh_cn"
+            ko="ko"
+            ar="ar"
+            pt_br="pt_br"
+            es="es"
+            tr="tr"
+            he="he"
+            ro="ro"
+            it="it"
+            fr="fr"
+            nl="nl"
+            de="de"
+        )
+
+    N=0
+    M=3
+    multi_encoder=(
+        MultiEncoder:
+            true="true"
+            false="false"
+    )
+    seed=0
+
+    submitter=slurm
+    decode_context_size=""
+    gold_context=False
+}
+
+plan train_evaluate_small {
+    reach ScorePredictions, ScorePredictionsNoContext, MeasureCXMI via (TgtLang: ja fr de) * (MultiEncoder: false true)
+}
+
+plan train_evaluate_concat {
+    reach ScorePredictionsNoContext, ScorePredictionsGold, ScorePredictionsOneContext, ScorePredictionsOneContextGold, MeasureCXMI via (TgtLang: ru ja zh_cn ko ar pt_br es tr he ro it fr nl de) * (MultiEncoder: false)
+}
+
+plan debug {
+    reach ScorePredictionsNoContext, ScorePredictionsGold, ScorePredictionsOneContext, ScorePredictionsOneContextGold, MeasureCXMI via (TgtLang: de) * (MultiEncoder: false)
+}
+
+plan provider_generate {
+    reach ProviderTranslate via (TgtLang: ru ja zh_cn ko ar pt_br es tr he ro it fr nl de)
+}
+
+plan test_tasks {
+    reach TestTask
+}
