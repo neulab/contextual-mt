@@ -1,5 +1,6 @@
 import argparse
 import os
+import random
 
 import numpy as np
 import torch
@@ -24,6 +25,9 @@ def compute_cxmi(
     source_context_size,
     target_context_size,
     batch_size,
+    word_level=False,
+    output_ll=False,
+    random_context=False,
 ):
     ids = []
     src_context_lines = [[] for _ in range(batch_size)]
@@ -38,6 +42,14 @@ def compute_cxmi(
     current_docs_pos = [0 for _ in range(batch_size)]
     baseline_xes = []
     contextual_xes = []
+    if random_context:
+        all_src_lines = [
+            encode(src_l, src_spm, src_dict) for doc in documents for src_l, _ in doc
+        ]
+        all_tgt_lines = [
+            encode(tgt_l, tgt_spm, tgt_dict) for doc in documents for _, tgt_l in doc
+        ]
+
     while True:
         baseline_samples = []
         contextual_samples = []
@@ -89,14 +101,21 @@ def compute_cxmi(
                 }
             )
 
+            if random_context:
+                src_context = random.sample(all_src_lines, source_context_size)
+                tgt_context = random.sample(all_tgt_lines, target_context_size)
+            else:
+                src_context = src_context_lines[idx]
+                tgt_context = tgt_context_lines[idx]
+
             contextual_src_context = create_context(
-                src_context_lines[idx],
+                src_context,
                 source_context_size,
                 break_id=src_dict.index("<brk>"),
                 eos_id=src_dict.eos(),
             )
             contextual_tgt_context = create_context(
-                tgt_context_lines[idx],
+                tgt_context,
                 target_context_size,
                 break_id=tgt_dict.index("<brk>"),
                 eos_id=tgt_dict.eos(),
@@ -130,10 +149,17 @@ def compute_cxmi(
         contextual_output = scorer.generate(models, contextual_sample)
         for batch_idx in range(len(baseline_samples)):
             # decode hypothesis
-            baseline_xes.append(baseline_output[batch_idx][0]["score"].cpu())
-            contextual_xes.append(contextual_output[batch_idx][0]["score"].cpu())
+            key = "positional_scores" if word_level else "score"
+            baseline_xes.append(baseline_output[batch_idx][0][key].cpu())
+            contextual_xes.append(contextual_output[batch_idx][0][key].cpu())
 
-    return [c_xes - b_xes for c_xes, b_xes in zip(contextual_xes, baseline_xes)], ids
+    cxmis = [c_xes - b_xes for c_xes, b_xes in zip(contextual_xes, baseline_xes)]
+    assert output_ll == word_level, "TODO"
+
+    if output_ll:
+        return cxmis, baseline_xes, contextual_xes, ids
+    else:
+        return cxmis, ids
 
 
 def main():
@@ -151,17 +177,16 @@ def main():
         "--path", required=True, metavar="FILE", help="path to model file"
     )
 
-    parser.add_argument("--source-context-size", type=int, default=None)
-    parser.add_argument("--target-context-size", type=int, default=None)
+    parser.add_argument("--source-context-size", default=None, type=int)
+    parser.add_argument("--target-context-size", default=None, type=int)
     parser.add_argument(
         "--batch-size",
         type=int,
         default=8,
         help=("number of sentences to inference in parallel"),
     )
+    parser.add_argument("--random-context", default=False, action="store_true")
     args = parser.parse_args()
-
-    print("here")
 
     # load files needed
     with open(args.source_file, "r") as src_f:
@@ -217,6 +242,7 @@ def main():
         source_context_size,
         target_context_size,
         batch_size=args.batch_size,
+        random_context=args.random_context,
     )
     print(f"CXMI: {np.mean(sample_cxmis):.05f}")
 
