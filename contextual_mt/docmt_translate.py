@@ -116,12 +116,12 @@ def main():
         tgt_spm.Load(os.path.join(args.path, f"spm.{args.target_lang}.model"))
 
     # load files needed
-    with open(args.source_file, "r") as src_f:
+    with open(args.source_file, "r", encoding='utf-8') as src_f:
         srcs = [line.strip() for line in src_f]
     with open(args.docids_file, "r") as docids_f:
         docids = [int(idx) for idx in docids_f]
     if args.reference_file is not None:
-        with open(args.reference_file, "r") as tgt_f:
+        with open(args.reference_file, "r", encoding='utf-8') as tgt_f:
             refs = [line.strip() for line in tgt_f]
     else:
         refs = [None for _ in srcs]
@@ -230,7 +230,7 @@ def main():
     assert len(preds) == len(ids)
     _, preds = zip(*sorted(zip(ids, preds)))
 
-    with open(args.predictions_file, "w") as f:
+    with open(args.predictions_file, "w", encoding='utf-8') as f:
         for pred in preds:
             print(pred, file=f)
 
