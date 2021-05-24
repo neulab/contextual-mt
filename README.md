@@ -2,8 +2,8 @@
 
 Implementations of context-aware models for document-level translation tasks, used in 
 
-1. [Measuring and Incresing Context Usage in Context-Aware Machine Translation](FIXME)
-2. [Do Context-Aware Translation Models Pay the Right Attention?](FIXME)
+1. [Measuring and Incresing Context Usage in Context-Aware Machine Translation](https://arxiv.org/abs/2105.03482)
+2. [Do Context-Aware Translation Models Pay the Right Attention?](https://arxiv.org/abs/2105.06977)
 
 Currently supports:
 
