@@ -69,7 +69,7 @@ def main():
     parser.add_argument(
         "--batch-size",
         type=int,
-        default=8,
+        default=4,
         help=("number of sentences to inference in parallel"),
     )
     parser.add_argument(
@@ -78,6 +78,8 @@ def main():
         action="store_true",
         help="if set, model will use ground-truth targets as context",
     )
+    parser.add_argument("--source-context-size", default=None, type=int)
+    parser.add_argument("--target-context-size", default=None, type=int)
 
     args = parser.parse_args()
 
@@ -96,8 +98,16 @@ def main():
     # load dict, params and generator from task
     src_dict = pretrained["task"].src_dict
     tgt_dict = pretrained["task"].tgt_dict
-    source_context_size = pretrained["task"].args.source_context_size
-    target_context_size = pretrained["task"].args.target_context_size
+    source_context_size = (
+        pretrained["task"].args.source_context_size
+        if args.source_context_size is None
+        else args.source_context_size
+    )
+    target_context_size = (
+        pretrained["task"].args.target_context_size
+        if args.target_context_size is None
+        else args.target_context_size
+    )
     generator = pretrained["task"].build_generator(
         models, args, seq_gen_cls=ContextualSequenceGenerator
     )
@@ -116,12 +126,12 @@ def main():
         tgt_spm.Load(os.path.join(args.path, f"spm.{args.target_lang}.model"))
 
     # load files needed
-    with open(args.source_file, "r") as src_f:
+    with open(args.source_file, "r", encoding='utf-8') as src_f:
         srcs = [line.strip() for line in src_f]
-    with open(args.docids_file, "r") as docids_f:
+    with open(args.docids_file, "r", encoding='utf-8') as docids_f:
         docids = [int(idx) for idx in docids_f]
     if args.reference_file is not None:
-        with open(args.reference_file, "r") as tgt_f:
+        with open(args.reference_file, "r", encoding='utf-8') as tgt_f:
             refs = [line.strip() for line in tgt_f]
     else:
         refs = [None for _ in srcs]
@@ -230,7 +240,7 @@ def main():
     assert len(preds) == len(ids)
     _, preds = zip(*sorted(zip(ids, preds)))
 
-    with open(args.predictions_file, "w") as f:
+    with open(args.predictions_file, "w", encoding='utf-8') as f:
         for pred in preds:
             print(pred, file=f)
 

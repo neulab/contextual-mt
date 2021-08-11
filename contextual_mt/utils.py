@@ -16,7 +16,8 @@ def decode(ids, spm, vocab):
 def create_context(sentences, context_size, break_id=None, eos_id=None):
     """ based on list of context sentences tensors, creates a context tensor """
     context = []
-    for s in sentences[len(sentences) - context_size :]:
+    # TODO: check if there is a bug here when context_size > len(sentences)
+    for s in sentences[max(len(sentences) - context_size, 0) :]:
         if context and break_id is not None:
             context.append(torch.tensor([break_id]))
         context.append(s)

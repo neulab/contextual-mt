@@ -110,12 +110,12 @@ class AttentionRegularizationTask(DocumentTranslationTask):
         tgt_dataset = data_utils.load_indexed_dataset(
             prefix + tgt, self.tgt_dict, self.args.dataset_impl
         )
-        with open(prefix + "docids", "r") as f:
+        with open(prefix + "docids", "r", encoding='utf-8') as f:
             doc_ids = [idx for idx in f]  # allow string
 
         pos_tags = None
         if split == "train" and os.path.exists(f"{prefix}pos.{src}"):
-            with open(f"{prefix}pos.{src}", "r") as f:
+            with open(f"{prefix}pos.{src}", "r", encoding='utf-8') as f:
                 pos_tags = [line.strip().split(" ") for line in f]
         pos_drop_probs = None
         if self.args.pos_drop_probs is not None:
