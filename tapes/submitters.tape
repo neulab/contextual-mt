@@ -9,7 +9,6 @@ submitter slurm :: COMMANDS TASK_VARIABLES CONFIGURATION {
         echo "set -e # stop on errors" >> $wrapper
         echo "set -o pipefail # stop on pipeline errors" >> $wrapper
         echo "set -u # stop on undeclared variables" >> $wrapper
-        echo "set -x # show each command as it is executed" >> $wrapper
 
         # print actual jobs 
         echo "$COMMANDS" >> $wrapper

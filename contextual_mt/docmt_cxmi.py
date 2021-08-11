@@ -154,7 +154,6 @@ def compute_cxmi(
             contextual_xes.append(contextual_output[batch_idx][0][key].cpu())
 
     cxmis = [c_xes - b_xes for c_xes, b_xes in zip(contextual_xes, baseline_xes)]
-    assert output_ll == word_level, "TODO"
 
     if output_ll:
         return cxmis, baseline_xes, contextual_xes, ids
@@ -186,14 +185,15 @@ def main():
         help=("number of sentences to inference in parallel"),
     )
     parser.add_argument("--random-context", default=False, action="store_true")
+    parser.add_argument("--save-word-level", default=None, type=str)
     args = parser.parse_args()
 
     # load files needed
-    with open(args.source_file, "r") as src_f:
+    with open(args.source_file, "r", encoding='utf-8') as src_f:
         srcs = [line.strip() for line in src_f]
-    with open(args.reference_file, "r") as tgt_f:
+    with open(args.reference_file, "r", encoding='utf-8') as tgt_f:
         refs = [line.strip() for line in tgt_f]
-    with open(args.docids_file, "r") as docids_f:
+    with open(args.docids_file, "r", encoding='utf-8') as docids_f:
         docids = [int(idx) for idx in docids_f]
 
     pretrained = hub_utils.from_pretrained(
@@ -232,7 +232,7 @@ def main():
         tgt_spm.Load(os.path.join(args.path, f"spm.{args.target_lang}.model"))
 
     documents = parse_documents(srcs, refs, docids)
-    sample_cxmis, ids = compute_cxmi(
+    sample_cxmis, _ = compute_cxmi(
         documents,
         models,
         src_spm,
@@ -245,6 +245,26 @@ def main():
         random_context=args.random_context,
     )
     print(f"CXMI: {np.mean(sample_cxmis):.05f}")
+    if args.save_word_level is not None:
+        word_cxmis, ids = compute_cxmi(
+            documents,
+            models,
+            src_spm,
+            src_dict,
+            tgt_spm,
+            tgt_dict,
+            source_context_size,
+            target_context_size,
+            batch_size=args.batch_size,
+            random_context=args.random_context,
+            word_level=True
+        )
+        sorted_word_cxmis = [x for _, x in sorted(zip(ids,word_cxmis))]
+        with open(args.save_word_level, "w", encoding='utf-8') as file:
+            for word_cxmi in sorted_word_cxmis:
+                print(" ".join(list(map(lambda x: str(x.item()), word_cxmi))), file=file)
+
+
 
 
 if __name__ == "__main__":

@@ -69,7 +69,7 @@ def main():
     parser.add_argument(
         "--batch-size",
         type=int,
-        default=8,
+        default=4,
         help=("number of sentences to inference in parallel"),
     )
     parser.add_argument(
@@ -128,7 +128,7 @@ def main():
     # load files needed
     with open(args.source_file, "r", encoding='utf-8') as src_f:
         srcs = [line.strip() for line in src_f]
-    with open(args.docids_file, "r") as docids_f:
+    with open(args.docids_file, "r", encoding='utf-8') as docids_f:
         docids = [int(idx) for idx in docids_f]
     if args.reference_file is not None:
         with open(args.reference_file, "r", encoding='utf-8') as tgt_f:
