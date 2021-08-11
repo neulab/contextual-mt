@@ -1,7 +1,11 @@
 from typing import Optional, List, Dict, Any
 
 import torch
+import torch.nn as nn
 from torch import Tensor
+
+from fairseq.modules import LayerDropModuleList, TransformerEncoderLayer
+from fairseq.modules.checkpoint_activations import checkpoint_wrapper
 
 from fairseq.models import (
     register_model,
@@ -44,6 +48,12 @@ class ContextualTransformerModel(TransformerModel):
             help="type of coword dropout to use. NOTE: only sample is used"
             "used in the paper",
         )
+        parser.add_argument(
+            "--multi-encoder",
+            default=False,
+            action="store_true",
+            help="wether to use multi-encoder in the source side",
+        )
 
     @classmethod
     def build_encoder(cls, args, src_dict, embed_tokens):
@@ -51,6 +61,7 @@ class ContextualTransformerModel(TransformerModel):
             args,
             src_dict,
             embed_tokens,
+            multi_encoder=getattr(args, "multi_encoder", False),
             coword_dropout_prob=getattr(args, "coword_dropout", 0.0),
             coword_dropout_type=getattr(args, "coword_dropout_type", "sample"),
         )
@@ -61,6 +72,7 @@ class ContextualTransformerModel(TransformerModel):
             args,
             tgt_dict,
             embed_tokens,
+            multi_encoder=getattr(args, "multi_encoder", False),
             no_encoder_attn=getattr(args, "no_cross_attention", False),
         )
 
@@ -113,6 +125,7 @@ class ContextualTransformerEncoder(TransformerEncoder):
         args,
         dictionary,
         embed_tokens,
+        multi_encoder=False,
         coword_dropout_type="sample",
         coword_dropout_prob=0.0,
     ):
@@ -121,6 +134,18 @@ class ContextualTransformerEncoder(TransformerEncoder):
         self.coword_dropout_prob = coword_dropout_prob
         # TODO: add this a variable token
         self.mask_id = dictionary.index("<mask>")
+        self.multi_encoder = multi_encoder
+        if self.multi_encoder:
+            if self.encoder_layerdrop > 0.0:
+                self.context_layers = LayerDropModuleList(p=self.encoder_layerdrop)
+            else:
+                self.context_layers = nn.ModuleList([])
+
+            self.context_layers.extend(
+                [self.build_encoder_layer(args) for i in range(args.encoder_layers)]
+            )
+
+        self.num_layers = len(self.layers)
 
     def forward(
         self,
@@ -173,23 +198,46 @@ class ContextualTransformerEncoder(TransformerEncoder):
         # as simple context encoding, we just concatenate context to input
         # TODO: add option for separate encoder
         # how to do it so that input can still attend to context
-        input_tokens = torch.cat([src_ctx_tokens, src_tokens], axis=1)
-        padding_mask = input_tokens.eq(self.padding_idx)
+        def encode(tokens, layers):
+            padding_mask = tokens.eq(self.padding_idx)
+            x, encoder_embedding = self.forward_embedding(tokens)
+            # B x T x C -> T x B x C
+            x = x.transpose(0, 1)
 
-        x, encoder_embedding = self.forward_embedding(input_tokens)
+            x_encoder_states = []
+            for layer in layers:
+                x = layer(x, padding_mask)
+                if return_all_hiddens:
+                    assert x_encoder_states is not None
+                    x_encoder_states.append(x)
 
-        # B x T x C -> T x B x C
-        x = x.transpose(0, 1)
+            if self.layer_norm is not None:
+                x = self.layer_norm(x)
 
-        x_encoder_states = []
-        for layer in self.layers:
-            x = layer(x, padding_mask)
-            if return_all_hiddens:
-                assert x_encoder_states is not None
-                x_encoder_states.append(x)
+            return x, padding_mask, encoder_embedding, x_encoder_states
 
-        if self.layer_norm is not None:
-            x = self.layer_norm(x)
+        if self.multi_encoder:
+            ctx_x, ctx_padding_mask, ctx_enc_embeddings, ctx_x_enc_states = encode(
+                src_ctx_tokens, self.context_layers
+            )
+            x, padding_mask, encoder_embedding, x_encoder_states = encode(
+                src_tokens, self.layers
+            )
+
+            x = torch.cat([ctx_x, x], axis=0)
+            padding_mask = torch.cat([ctx_padding_mask, padding_mask], axis=1)
+            encoder_embedding = torch.cat(
+                [ctx_enc_embeddings, encoder_embedding], axis=1
+            )
+            x_encoder_states = [
+                torch.cat([ctx_states, states], axis=0)
+                for ctx_states, states in zip(ctx_x_enc_states, x_encoder_states)
+            ]
+
+        else:
+            x, padding_mask, encoder_embedding, x_encoder_states = encode(
+                torch.cat([src_ctx_tokens, src_tokens], axis=1), self.layers
+            )
 
         return {
             "encoder_out": [x],  # T x B x C
@@ -202,8 +250,40 @@ class ContextualTransformerEncoder(TransformerEncoder):
 
 
 class ContextualTransformerDecoder(TransformerDecoder):
-    def __init__(self, args, dictionary, embed_tokens, no_encoder_attn=False):
+    def __init__(
+        self, args, dictionary, embed_tokens, multi_encoder=False, no_encoder_attn=False
+    ):
         super().__init__(args, dictionary, embed_tokens, no_encoder_attn)
+        self.multi_encoder = multi_encoder
+        if self.multi_encoder:
+            if self.decoder_layerdrop > 0.0:
+                self.context_layers = LayerDropModuleList(p=self.decoder_layerdrop)
+            else:
+                self.context_layers = nn.ModuleList([])
+
+            self.context_layers.extend(
+                [self.build_encoder_layer(args) for i in range(args.decoder_layers)]
+            )
+
+    def build_encoder_layer(self, args):
+        layer = TransformerEncoderLayer(args)
+        if getattr(args, "checkpoint_activations", False):
+            layer = checkpoint_wrapper(layer)
+        return layer
+
+    def forward_embedding(self, tokens, token_embedding: Optional[torch.Tensor] = None):
+        # embed tokens and positions
+        if token_embedding is None:
+            token_embedding = self.embed_tokens(tokens)
+        x = embed = self.embed_scale * token_embedding
+        if self.embed_positions is not None:
+            x = embed + self.embed_positions(tokens)
+        if self.layernorm_embedding is not None:
+            x = self.layernorm_embedding(x)
+        x = self.dropout_module(x)
+        if self.quant_noise is not None:
+            x = self.quant_noise(x)
+        return x, embed
 
     def forward(
         self,
@@ -305,13 +385,26 @@ class ContextualTransformerDecoder(TransformerDecoder):
         if alignment_layer is None:
             alignment_layer = 0  # self.num_layers - 1
 
-        # concat context_tokens to input
-        # FIXME: this is really simple
-        input_tokens = torch.cat([context_tokens, prev_output_tokens], axis=1)
-        context_end_id = context_tokens.size(1)
+        if self.multi_encoder:
+            ctx_padding_mask = context_tokens.eq(self.padding_idx)
+            ctx_x, _ = self.forward_embedding(context_tokens)
+            # B x T x C -> T x B x C
+            ctx_x = ctx_x.transpose(0, 1)
+            for layer in self.context_layers:
+                ctx_x = layer(ctx_x, ctx_padding_mask)
+
+            if self.layer_norm is not None:
+                ctx_x = self.layer_norm(ctx_x)
+
+            input_tokens = prev_output_tokens
+        else:
+            input_tokens = torch.cat([context_tokens, prev_output_tokens], axis=1)
+            context_end_id = context_tokens.size(1)
 
         # embed positions
         if self.embed_positions is not None:
+            # concat context_tokens to input
+            # FIXME: this is really simple
             positions = self.embed_positions(
                 input_tokens, incremental_state=incremental_state
             )
@@ -348,6 +441,37 @@ class ContextualTransformerDecoder(TransformerDecoder):
         if self.cross_self_attention or input_tokens.eq(self.padding_idx).any():
             self_attn_padding_mask = input_tokens.eq(self.padding_idx)
 
+        if self.multi_encoder:
+            cross_attn = (
+                torch.cat([encoder_out["encoder_out"][0], ctx_x], axis=0)
+                if (encoder_out is not None and len(encoder_out["encoder_out"]) > 0)
+                else ctx_x
+            )
+            cross_attn_mask = (
+                torch.cat(
+                    [encoder_out["encoder_padding_mask"][0], ctx_padding_mask], axis=1
+                )
+                if (
+                    encoder_out is not None
+                    and len(encoder_out["encoder_padding_mask"]) > 0
+                )
+                else ctx_padding_mask
+            )
+        else:
+            cross_attn = (
+                encoder_out["encoder_out"][0]
+                if (encoder_out is not None and len(encoder_out["encoder_out"]) > 0)
+                else None
+            )
+            cross_attn_mask = (
+                encoder_out["encoder_padding_mask"][0]
+                if (
+                    encoder_out is not None
+                    and len(encoder_out["encoder_padding_mask"]) > 0
+                )
+                else None
+            )
+
         # decoder layers
         attn: Optional[Tensor] = None
         inner_states: List[Optional[Tensor]] = [x]
@@ -360,15 +484,8 @@ class ContextualTransformerDecoder(TransformerDecoder):
                 self_attn_mask = None
             x, layer_attn, _ = layer(
                 x,
-                encoder_out["encoder_out"][0]
-                if (encoder_out is not None and len(encoder_out["encoder_out"]) > 0)
-                else None,
-                encoder_out["encoder_padding_mask"][0]
-                if (
-                    encoder_out is not None
-                    and len(encoder_out["encoder_padding_mask"]) > 0
-                )
-                else None,
+                cross_attn,
+                cross_attn_mask,
                 incremental_state,
                 self_attn_mask=self_attn_mask,
                 self_attn_padding_mask=self_attn_padding_mask,
@@ -388,7 +505,8 @@ class ContextualTransformerDecoder(TransformerDecoder):
                 attn = attn.mean(dim=0)
 
         # remove context
-        x = x[context_end_id:]
+        if not self.multi_encoder:
+            x = x[context_end_id:]
 
         if self.layer_norm is not None:
             x = self.layer_norm(x)
