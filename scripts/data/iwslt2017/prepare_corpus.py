@@ -5,14 +5,14 @@ import glob
 
 
 def extract_train(train_inp, train_out, docids_out=None):
-    with open(train_inp, "r") as f:
+    with open(train_inp, "r", encoding="utf-8") as f:
         all_docs = f.read()
         docs_xml = [f"{d}</doc>" for d in all_docs.split("</doc>")[:-1]]
         docs = [xmltodict.parse(doc) for doc in docs_xml]
 
-    train_out_f = open(train_out, "w")
+    train_out_f = open(train_out, "w", encoding="utf-8")
     if docids_out is not None:
-        docids_out_f = open(docids_out, "w")
+        docids_out_f = open(docids_out, "w", encoding="utf-8")
 
     for doc in docs:
         if "#text" not in doc["doc"]:
@@ -25,7 +25,7 @@ def extract_train(train_inp, train_out, docids_out=None):
 
 
 def extract_eval(eval_inp, eval_out, docids_out=None):
-    with open(eval_inp, "r") as f:
+    with open(eval_inp, "r", encoding="utf-8") as f:
         all_docs = f.read()
         docs_xml = xmltodict.parse(all_docs)
         docs = (
