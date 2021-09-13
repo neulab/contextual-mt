@@ -7,7 +7,7 @@ from fairseq.data import data_utils, FairseqDataset
 
 
 def collate(samples, pad_id, eos_id, sort_by_src=False):
-    """ creates a batch out of a list of samples to be feed to a contextual_mt model """
+    """creates a batch out of a list of samples to be feed to a contextual_mt model"""
     id = torch.LongTensor([s["id"] for s in samples])
     # encode source and source context
     src_tokens = data_utils.collate_tokens(

@@ -2,8 +2,8 @@
 
 Implementations of context-aware models for document-level translation tasks, used in 
 
-1. [Measuring and Incresing Context Usage in Context-Aware Machine Translation](FIXME)
-2. [Do Context-Aware Translation Models Pay the Right Attention?](FIXME)
+1. [Measuring and Incresing Context Usage in Context-Aware Machine Translation](https://arxiv.org/abs/2105.03482)
+2. [Do Context-Aware Translation Models Pay the Right Attention?](https://arxiv.org/abs/2105.06977)
 
 Currently supports:
 
@@ -131,6 +131,7 @@ python contextual_mt/docmt_translate.py \
     --source-file ${data_dir}/test.src \
     --predictions-file ${predictions_dir}/test.pred.tgt \
     --docids-file ${data_dir}/test.docids \
+
     --beam 5 
 ```
 
@@ -171,4 +172,25 @@ python contextual_mt/docmt_contrastive_eval.py \
     --src-context-file $source_ctx_contr \
     --target-file $target_contr \
     --tgt-context-file $target_ctx_contr
+```
+
+# Workflows
+
+To facilitate reproducing the paper results, we include files to run the whole trainign and evaluation pipelines.
+
+Start by install [ducttape](https://github.com/jhclark/ducttape). 
+
+## *Measuring and Increasing Context Usage*
+
+Start by modifying the relevant paths in `tapes/cxmi_paper.tconf`. 
+Also modify the `submitter` to the one best suited for you system. 
+The original work used the `slurm` submitter.
+
+```
+ducttape tapes/cxmi_paper.tape -C tapes/cxmi_paper.tconf -j $num_parallel_jobs
+```
+
+To obtain a summary of the experimental results, run
+```
+ducttape tapes/cxmi_paper.tape -C tapes/cxmi_paper.tconf summary
 ```

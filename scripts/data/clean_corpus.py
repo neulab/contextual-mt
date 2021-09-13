@@ -27,9 +27,11 @@ def main():
     source_out = f"{args.output_pref}.{args.source_lang}"
     target_out = f"{args.output_pref}.{args.target_lang}"
 
-    with open(source_in, "r") as src_in, open(target_in, "r") as tgt_in, open(
-        source_out, "w"
-    ) as src_out, open(target_out, "w") as tgt_out:
+    with open(source_in, "r", encoding="utf-8") as src_in, open(
+        target_in, "r", encoding="utf-8"
+    ) as tgt_in, open(source_out, "w") as src_out, open(
+        target_out, "w", encoding="utf-8"
+    ) as tgt_out:
         # read size chunk_size into memory
         while True:
             src_lines, tgt_lines = [], []

@@ -1,0 +1,107 @@
+global {
+    ducttape_output="/projects/tir4/users/pfernand/cxmi-paper-outputs"
+    ducttape_experimental_imports=true
+    ducttape_experimental_submitters=true
+    ducttape_experimental_multiproc=true
+
+    repo="/home/pfernand/repos/contextual-mt"
+    data_dir="/projects/tir1/corpora/dialogue_mt/iwslt2017/"
+    pretrained_dir="/projects/tir5/users/patrick/checkpoints/paracrawl/"
+    contr_base=/home/pfernand/repos/ContraPro
+    bawden_data=/home/pfernand/repos/discourse-mt-test-sets/test-sets
+    comet_dir=/projects/tir1/users/pfernand/comet/
+
+    src_lang="en"
+    tgt_lang=(
+        TgtLang: 
+            fr="fr"
+            de="de"
+        )
+
+    N=(
+        N:
+            0=0
+            1=1
+            3=3
+    )
+    M=(
+        M:
+            0=0
+            1=1
+            3=3
+    )
+    coword_dropout=(
+        CowordDropout: 
+            0=0.
+            01=0.1
+            02=0.2
+            03=0.3
+    )
+    sample_context_size=(
+        SampleContextSize:
+            false=false
+            true=true
+    )
+    multi_encoder=(
+        MultiEncoder:
+            false=false
+            true=true
+    )
+    seed=(
+        Seed:
+            first=0
+            second=9
+            third=11
+    )
+
+    submitter=slurm
+    source_decode_size=(
+        SourceDecodeSize:
+            null=""
+            0=0
+            1=1
+            2=2
+            3=3
+    )
+    target_decode_size=(
+        TargetDecodeSize:
+            null=""
+            0=0
+            1=1
+            2=2
+            3=3
+    )
+
+
+    gold_context=(
+        GoldContext:
+            false=false
+            true=true
+    )
+
+}
+
+plan TrainCXMIModels {
+    reach MeasureCXMI via (TgtLang: *) * (M: 3) * (CowordDropout: *) * (SampleContextSize: true) * (TargetDecodeSize: 0 1 2 3)
+    reach MeasureCXMI via (TgtLang: *) * (N: 3) * (CowordDropout: *) * (SampleContextSize: true) * (SourceDecodeSize: 0 1 2 3)
+    reach MeasureCXMI via (TgtLang: *) * (Pretrain: true) * (M: 3) * (CowordDropout: *) * (SampleContextSize: true) * (TargetDecodeSize: 0 1 2 3)
+    reach MeasureCXMI via (TgtLang: *) * (Pretrain: true) * (N: 3) * (CowordDropout: *) * (SampleContextSize: true) * (SourceDecodeSize: 0 1 2 3)
+}
+
+plan TrainEvaluateTranslationModels {
+    reach AverageResults via (TgtLang: *) * (CowordDropout: *) * (Seed: *)
+    reach AverageResults via (TgtLang: *) * (M: 1) * (CowordDropout: *) * (GoldContext: true false) * (Seed: *)
+    reach AverageResults via (TgtLang: *) * (N: 1) * (M: 1) * (CowordDropout: *) * (GoldContext: true false) * (Seed: *)
+}
+
+plan TrainEvaluatePretrainedModels {
+    reach AverageResults via (TgtLang: *) * (Pretrain: true) * (CowordDropout: *) * (Seed: *)
+    reach AverageResults via (TgtLang: *) * (Pretrain: true) * (M: 1) * (CowordDropout: *) * (GoldContext: true false) * (Seed: *)
+    reach AverageResults via (TgtLang: *) * (Pretrain: true) * (N: 1) * (M: 1) * (CowordDropout: *) * (GoldContext: true false) * (Seed: *)
+}
+
+plan TrainEvaluateMultiModels {
+    reach AverageResults via (TgtLang: *) * (CowordDropout: *) * (GoldContext: true false) * (Seed: *)
+    reach AverageResults via (TgtLang: *) * (M: 1) * (CowordDropout: *) * (GoldContext: true false) * (Seed: first second) * (MultiEncoder: true)
+    reach AverageResults via (TgtLang: *) * (N: 1) * (M: 1) * (CowordDropout: *) * (GoldContext: true false) * (Seed: *)
+}
