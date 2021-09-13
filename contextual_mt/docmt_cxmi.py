@@ -189,11 +189,11 @@ def main():
     args = parser.parse_args()
 
     # load files needed
-    with open(args.source_file, "r", encoding='utf-8') as src_f:
+    with open(args.source_file, "r", encoding="utf-8") as src_f:
         srcs = [line.strip() for line in src_f]
-    with open(args.reference_file, "r", encoding='utf-8') as tgt_f:
+    with open(args.reference_file, "r", encoding="utf-8") as tgt_f:
         refs = [line.strip() for line in tgt_f]
-    with open(args.docids_file, "r", encoding='utf-8') as docids_f:
+    with open(args.docids_file, "r", encoding="utf-8") as docids_f:
         docids = [int(idx) for idx in docids_f]
 
     pretrained = hub_utils.from_pretrained(
@@ -257,14 +257,14 @@ def main():
             target_context_size,
             batch_size=args.batch_size,
             random_context=args.random_context,
-            word_level=True
+            word_level=True,
         )
-        sorted_word_cxmis = [x for _, x in sorted(zip(ids,word_cxmis))]
-        with open(args.save_word_level, "w", encoding='utf-8') as file:
+        sorted_word_cxmis = [x for _, x in sorted(zip(ids, word_cxmis))]
+        with open(args.save_word_level, "w", encoding="utf-8") as file:
             for word_cxmi in sorted_word_cxmis:
-                print(" ".join(list(map(lambda x: str(x.item()), word_cxmi))), file=file)
-
-
+                print(
+                    " ".join(list(map(lambda x: str(x.item()), word_cxmi))), file=file
+                )
 
 
 if __name__ == "__main__":
