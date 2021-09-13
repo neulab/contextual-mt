@@ -177,12 +177,14 @@ python contextual_mt/docmt_contrastive_eval.py \
 # Workflows
 
 To facilitate reproducing the paper results, we include files to run the whole trainign and evaluation pipelines.
+
 Start by install [ducttape](https://github.com/jhclark/ducttape). 
 
-## *Measuring and Increasing Context Usage* paper
+## *Measuring and Increasing Context Usage*
 
 Start by modifying the relevant paths in `tapes/cxmi_paper.tconf`. 
-Also modify the `submitter` to the one best for you system.
+Also modify the `submitter` to the one best suited for you system. 
+The original work used the `slurm` submitter.
 
 ```
 ducttape tapes/cxmi_paper.tape -C tapes/cxmi_paper.tconf -j $num_parallel_jobs
