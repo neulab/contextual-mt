@@ -1,7 +1,6 @@
 import argparse
 import fasttext
 from itertools import takewhile
-from alphabet_detector import AlphabetDetector
 
 
 def length_filter(line, max_length=250):
