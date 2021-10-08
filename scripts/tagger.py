@@ -23,6 +23,11 @@ class Tagger(abc.ABC):
         return re.sub(r"^\W+|\W+$", "", word.lower())
 
     def formality_tags(self, cur_src, cur_src_doc, cur_tgt, cur_tgt_doc, cur_align):
+        # TODO: inter-sentential especification needs to be added
+        # this would go by checking if the formality tag already appeared in the context
+        # by for example, passing a set of seen formalities in the previsous sentences
+        # similar to what happens in lexical cohesion
+        # NOTE: every language specific verb formality checker will have to do this aswell
         tags = []
         formality_words = [v for vs in self.formality_classes.values() for v in vs]
         for word in cur_tgt.split(" "):
@@ -52,13 +57,19 @@ class Tagger(abc.ABC):
         ]
         tags = [False] * len(tgt_lemmas)
 
+        tmp_cohesion_words = defaultdict(lambda: defaultdict(lambda: 0))
         for s, t in align.items():
             src_lemma = src_lemmas[s]
             tgt_lemma = tgt_lemmas[t]
             if src_lemma is not None and tgt_lemma is not None:
-                cohesion_words[src_lemma][tgt_lemma] += 1
-                if cohesion_words[src_lemma][tgt_lemma] > 3:
+                if cohesion_words[src_lemma][tgt_lemma] > 1:
                     tags[t] = True
+                tmp_cohesion_words[src_lemma][tgt_lemma] += 1
+        
+        for src_lemma in tmp_cohesion_words.keys()
+            for tgt_lemma in tmp_cohesion_words[src_lemma].keys():
+                cohesion_words[src_lemma][tgt_lemma] += tmp_cohesion_words[src_lemma][tgt_lemma]
+
         return tags, cohesion_words
 
     def verb_form(self, cur_doc):
@@ -76,6 +87,9 @@ class Tagger(abc.ABC):
         return tags
 
     def pronouns(self, src_doc, tgt_doc, align):
+        # TODO: inter-sentential especification needs to be added
+        # this would go by adding a coreference resolution that would
+        # check if the coreferent is part of the context rather than the current sentence
         src = [
             tok.text if not tok.is_punct else None
             for tok in src_doc
