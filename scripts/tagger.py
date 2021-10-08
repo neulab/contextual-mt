@@ -24,7 +24,7 @@ class Tagger(abc.ABC):
 
     def formality_tags(self, cur_src, cur_src_doc, cur_tgt, cur_tgt_doc, cur_align):
         # TODO: inter-sentential especification needs to be added
-        # this would go by checking if the formality tag already appeared in the context
+        # this would go by checking if the formality already appeared in the context
         # by for example, passing a set of seen formalities in the previsous sentences
         # similar to what happens in lexical cohesion
         # NOTE: every language specific verb formality checker will have to do this aswell
@@ -73,6 +73,11 @@ class Tagger(abc.ABC):
         return tags, cohesion_words
 
     def verb_form(self, cur_doc):
+        # TODO: inter-sentential especification needs to be added
+        # this would go by checking if a specific verb_form already appeared in the context
+        # by for example, passing a set of seen verb_forms in the previsous sentences
+        # similar to what happens in lexical cohesion
+        # NOTE: every language specific verb formality checker will have to do this aswell
         tags = []
         for tok in cur_doc:
             if tok.pos_ == "VERB" and (
