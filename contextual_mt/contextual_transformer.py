@@ -22,6 +22,9 @@ from fairseq.models.transformer import (
     transformer_vaswani_wmt_en_de_big,
 )
 
+from fairseq.models.transformer_lm import base_lm_architecture
+
+
 
 @register_model("contextual_transformer")
 class ContextualTransformerModel(TransformerModel):
@@ -43,7 +46,7 @@ class ContextualTransformerModel(TransformerModel):
         )
         parser.add_argument(
             "--coword-dropout-type",
-            choices=("sample", "predefined_sample", "whole", "suffix"),
+            choices=("sample", "whole", "suffix"),
             default="sample",
             help="type of coword dropout to use. NOTE: only sample is used"
             "used in the paper",
@@ -98,6 +101,7 @@ class ContextualTransformerModel(TransformerModel):
         Copied from the base class, but without ``**kwargs``,
         which are not supported by TorchScript.
         """
+        #import ipdb; ipdb.set_trace()
         encoder_out = self.encoder(
             src_tokens,
             src_lengths=src_lengths,
@@ -533,3 +537,11 @@ def contextual_transformer_iwslt_architecture(args):
 @register_model_architecture("contextual_transformer", "contextual_transformer_big")
 def contextual_transformer_big_architecture(args):
     transformer_vaswani_wmt_en_de_big(args)
+
+@register_model_architecture("transformer_lm", "transformer_lm_iwslt")
+def transformer_iwslt_de_en(args):
+    args.decoder_embed_dim = getattr(args, "decoder_embed_dim", 512)
+    args.decoder_ffn_embed_dim = getattr(args, "decoder_ffn_embed_dim", 1024)
+    args.decoder_attention_heads = getattr(args, "decoder_attention_heads", 4)
+    args.decoder_layers = getattr(args, "decoder_layers", 6)
+    base_lm_architecture(args)

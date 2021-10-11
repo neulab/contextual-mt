@@ -119,8 +119,6 @@ class ContextualDataset(FairseqDataset):
             context
         target_context_size (int): the number of sentences to pass in the target
             context
-        pos_drop_probs: NOT USED
-        src_pos_targ: NOT USED
         sampled_context_size (bool): if set, context sizes will be sampled in
             a between 0 and `src/tgt_ctx_size` (default: False)
         break_tag: token used to separate context sentences
@@ -139,10 +137,10 @@ class ContextualDataset(FairseqDataset):
         contextual_ids,
         src_ctx_size=0,
         tgt_ctx_size=0,
-        pos_drop_probs=None,
-        src_pos_tags=None,
         break_tag=None,
         sample_context_size=False,
+        lm_schedule_type=None,
+        lm_prob=0.,
         shuffle=True,
     ):
         assert src_dict.pad() == tgt_dict.pad()
@@ -161,10 +159,14 @@ class ContextualDataset(FairseqDataset):
         self.tgt_ctx_size = tgt_ctx_size
         self.contextual_ids = np.array(contextual_ids)
         self.break_tag = break_tag
+        self.lm_schedule_type = lm_schedule_type
+        self.lm_prob = lm_prob
         self.sample_context_size = sample_context_size
         self.shuffle = shuffle
 
-        # recompute sizes  based on context size and special tokens
+        self.mask_id = src_dict.index("<mask>")
+
+        # recompute sizes based on context size and special tokens
         full_src_sizes, full_tgt_sizes = [], []
         for i, size in enumerate(src_sizes):
             for j in range(1, self.src_ctx_size + 1):
@@ -183,19 +185,20 @@ class ContextualDataset(FairseqDataset):
         self.src_sizes = np.array(full_src_sizes)
         self.tgt_sizes = np.array(full_tgt_sizes)
 
-        # NOTE: not used in the paper
-        if pos_drop_probs is not None:
-            self.pos_drop_probs = defaultdict(lambda: 0.0)
-            for pos, p in pos_drop_probs.items():
-                self.pos_drop_probs[pos] = p
-        else:
-            self.pos_drop_probs = None
-        self.src_pos_tags = src_pos_tags
-
     def __getitem__(self, index):
         # remove included eos token
         src_item = self.src[index][:-1]
         tgt_item = self.tgt[index][:-1]
+
+        # sample if we are doing using LM objective
+        if self.lm_schedule_type == "all":
+            if np.random.random() < self.lm_prob:
+                src_item = torch.tensor([self.mask_id])
+        elif self.lm_schedule_type == "suffix":
+            if np.random.random() < self.lm_prob:
+                l = np.random.randint(0, max(1, len(src_item)))
+                src_item = torch.cat([src_item[:l], torch.tensor([self.mask_id])])
+
         src_ctx_item = torch.tensor([]).long()
         tgt_ctx_item = torch.tensor([]).long()
         src_break_id = torch.tensor([self.src_dict.index(self.break_tag)])
@@ -243,12 +246,6 @@ class ContextualDataset(FairseqDataset):
             "tgt_context": tgt_ctx_item,
             "target": tgt_item,
         }
-
-        if self.src_pos_tags is not None and self.pos_drop_probs is not None:
-            probs = []
-            for pos in self.src_pos_tags[index]:
-                probs.append(self.pos_drop_probs[pos])
-            sample["src_sample_probs"] = torch.tensor(probs)
 
         return sample
 

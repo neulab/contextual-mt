@@ -15,7 +15,7 @@ from contextual_mt.contextual_dataset import collate
 from contextual_mt.utils import encode, create_context, parse_documents
 
 
-def compute_cxmi(
+def compute_crossentropy(
     documents,
     models,
     src_spm,
@@ -25,9 +25,7 @@ def compute_cxmi(
     source_context_size,
     target_context_size,
     batch_size,
-    word_level=False,
-    output_ll=False,
-    random_context=False,
+    no_source=False
 ):
     ids = []
     src_context_lines = [[] for _ in range(batch_size)]
@@ -35,24 +33,14 @@ def compute_cxmi(
 
     scorer = SequenceScorer(tgt_dict)
 
-    # info necessary to crieate batches and recreate docs
+    # info necessary to create batches and recreate docs
     doc_idx = 0
     current_docs = [None for _ in range(batch_size)]
     current_docs_ids = [-1 for _ in range(batch_size)]
     current_docs_pos = [0 for _ in range(batch_size)]
-    baseline_xes = []
-    contextual_xes = []
-    if random_context:
-        all_src_lines = [
-            encode(src_l, src_spm, src_dict) for doc in documents for src_l, _ in doc
-        ]
-        all_tgt_lines = [
-            encode(tgt_l, tgt_spm, tgt_dict) for doc in documents for _, tgt_l in doc
-        ]
-
+    xes = []
     while True:
-        baseline_samples = []
-        contextual_samples = []
+        samples = []
         for idx in range(batch_size):
             # if any of the docs in the batch has finished replace by a new one
             if current_docs[idx] is None or current_docs_pos[idx] >= len(
@@ -74,39 +62,13 @@ def compute_cxmi(
             ids.append((current_docs_ids[idx], current_docs_pos[idx]))
 
             # binarize source and create input with context and target
-            source_noeos = encode(src_l, src_spm, src_dict)
+            source_noeos = encode(src_l, src_spm, src_dict) if not no_source else torch.tensor([src_dict.index("<mask>")])
             source = torch.stack([*source_noeos, torch.tensor(src_dict.eos())])
             target_noeos = encode(tgt_l, tgt_spm, tgt_dict)
             target = torch.stack([*target_noeos, torch.tensor(tgt_dict.eos())])
 
-            baseline_src_context = create_context(
-                src_context_lines[idx],
-                0,
-                break_id=src_dict.index("<brk>"),
-                eos_id=src_dict.eos(),
-            )
-            baseline_tgt_context = create_context(
-                tgt_context_lines[idx],
-                0,
-                break_id=tgt_dict.index("<brk>"),
-                eos_id=tgt_dict.eos(),
-            )
-            baseline_samples.append(
-                {
-                    "id": 0,
-                    "src_context": baseline_src_context,
-                    "source": source,
-                    "tgt_context": baseline_tgt_context,
-                    "target": target,
-                }
-            )
-
-            if random_context:
-                src_context = random.sample(all_src_lines, source_context_size)
-                tgt_context = random.sample(all_tgt_lines, target_context_size)
-            else:
-                src_context = src_context_lines[idx]
-                tgt_context = tgt_context_lines[idx]
+            src_context = src_context_lines[idx]
+            tgt_context = tgt_context_lines[idx]
 
             contextual_src_context = create_context(
                 src_context,
@@ -120,7 +82,7 @@ def compute_cxmi(
                 break_id=tgt_dict.index("<brk>"),
                 eos_id=tgt_dict.eos(),
             )
-            contextual_samples.append(
+            samples.append(
                 {
                     "id": 0,
                     "src_context": contextual_src_context,
@@ -140,25 +102,16 @@ def compute_cxmi(
             break
 
         # create batch
-        baseline_sample = collate(baseline_samples, src_dict.pad(), src_dict.eos())
-        baseline_sample = utils.move_to_cuda(baseline_sample)
-        contextual_sample = collate(contextual_samples, src_dict.pad(), src_dict.eos())
-        contextual_sample = utils.move_to_cuda(contextual_sample)
+        sample = collate(samples, src_dict.pad(), src_dict.eos())
+        sample = utils.move_to_cuda(sample)
 
-        baseline_output = scorer.generate(models, baseline_sample)
-        contextual_output = scorer.generate(models, contextual_sample)
-        for batch_idx in range(len(baseline_samples)):
+        contextual_output = scorer.generate(models, sample)
+        for batch_idx in range(len(samples)):
             # decode hypothesis
-            key = "positional_scores" if word_level else "score"
-            baseline_xes.append(baseline_output[batch_idx][0][key].cpu())
-            contextual_xes.append(contextual_output[batch_idx][0][key].cpu())
+            key = "score"
+            xes.append(contextual_output[batch_idx][0][key].cpu())
 
-    cxmis = [c_xes - b_xes for c_xes, b_xes in zip(contextual_xes, baseline_xes)]
-
-    if output_ll:
-        return cxmis, baseline_xes, contextual_xes, ids
-    else:
-        return cxmis, ids
+        return xes, ids
 
 
 def main():
@@ -184,8 +137,11 @@ def main():
         default=8,
         help=("number of sentences to inference in parallel"),
     )
-    parser.add_argument("--random-context", default=False, action="store_true")
-    parser.add_argument("--save-word-level", default=None, type=str)
+    parser.add_argument(
+        "--no-source",
+        action="store_true",
+        help=""
+    )
     args = parser.parse_args()
 
     # load files needed
@@ -232,7 +188,7 @@ def main():
         tgt_spm.Load(os.path.join(args.path, f"spm.{args.target_lang}.model"))
 
     documents = parse_documents(srcs, refs, docids)
-    sample_cxmis, _ = compute_cxmi(
+    sample_xes, _ = compute_crossentropy(
         documents,
         models,
         src_spm,
@@ -242,29 +198,9 @@ def main():
         source_context_size,
         target_context_size,
         batch_size=args.batch_size,
-        random_context=args.random_context,
+        no_source=args.no_source,
     )
-    print(f"CXMI: {np.mean(sample_cxmis):.05f}")
-    if args.save_word_level is not None:
-        word_cxmis, ids = compute_cxmi(
-            documents,
-            models,
-            src_spm,
-            src_dict,
-            tgt_spm,
-            tgt_dict,
-            source_context_size,
-            target_context_size,
-            batch_size=args.batch_size,
-            random_context=args.random_context,
-            word_level=True,
-        )
-        sorted_word_cxmis = [x for _, x in sorted(zip(ids, word_cxmis))]
-        with open(args.save_word_level, "w", encoding="utf-8") as file:
-            for word_cxmi in sorted_word_cxmis:
-                print(
-                    " ".join(list(map(lambda x: str(x.item()), word_cxmi))), file=file
-                )
+    print(f"Perplexity: {np.exp(-np.mean(sample_xes)):.03f}")
 
 
 if __name__ == "__main__":

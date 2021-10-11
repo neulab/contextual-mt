@@ -35,16 +35,19 @@ class DocumentTranslationTask(TranslationTask):
             action="store_true",
         )
         parser.add_argument(
+            "--lm-schedule-type",
+            default=None,
+        )
+        parser.add_argument(
+            "--lm-prob",
+            default=0.,
+            type=float
+        )
+        parser.add_argument(
             "--break-tag",
             default="<brk>",
             type=str,
             help="is set, separates context sentences by the break tag",
-        )
-        parser.add_argument(
-            "--pos-drop-probs",
-            nargs="+",
-            type=str,
-            help="Pass probabilities for dropping per POS tag. NOTE: not use for experiments",
         )
 
     def build_model(self, args):
@@ -108,20 +111,6 @@ class DocumentTranslationTask(TranslationTask):
         with open(prefix + "docids", "r") as f:
             doc_ids = [int(idx) for idx in f]
 
-        # checks for POS tags for every token in the training set
-        # so we can have specific probabilites per POS
-        # NOTE: not used during the paper
-        pos_tags = None
-        if split == "train" and os.path.exists(f"{prefix}pos.{src}"):
-            with open(f"{prefix}pos.{src}", "r") as f:
-                pos_tags = [line.strip().split(" ") for line in f]
-        pos_drop_probs = None
-        if self.args.pos_drop_probs is not None:
-            pos_drop_probs = {
-                p.split(":")[0]: float(p.split(":")[1])
-                for p in self.args.pos_drop_probs
-            }
-
         self.datasets[split] = ContextualDataset(
             src_dataset,
             src_dataset.sizes,
@@ -132,9 +121,9 @@ class DocumentTranslationTask(TranslationTask):
             doc_ids,
             self.args.source_context_size,
             self.args.target_context_size,
-            src_pos_tags=pos_tags,
-            pos_drop_probs=pos_drop_probs,
             break_tag=self.args.break_tag,
             sample_context_size=self.args.sample_context_size,
+            lm_schedule_type=self.args.lm_schedule_type,
+            lm_prob=self.args.lm_prob,
             shuffle=True,
         )

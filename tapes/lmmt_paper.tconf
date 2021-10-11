@@ -1,0 +1,82 @@
+global {
+    ducttape_output="/projects/tir4/users/pfernand/workflows-outputs/lmmt-paper-outputs-test"
+    ducttape_experimental_imports=true
+    ducttape_experimental_submitters=true
+    ducttape_experimental_multiproc=true
+    submitter=slurm
+    comet_dir=/projects/tir1/users/pfernand/comet/
+
+    repo="/home/pfernand/repos/contextual-mt-v2"
+    data_dir="/projects/tir1/corpora/contextual_mt/iwslt2017/en-de/"
+    monodata_dir="/projects/tir1/corpora/contextual_mt/newscrawl/de-10M/"
+
+    pretrained_dir="/projects/tir5/users/patrick/checkpoints/paracrawl/"
+
+    contr_base=/home/pfernand/repos/ContraPro
+    bawden_data=/home/pfernand/repos/discourse-mt-test-sets/test-sets
+
+    src_lang="en"
+    tgt_lang=(
+        TgtLang: 
+            fr="fr"
+            de="de"
+        )
+    N=0
+    M=(
+        M:
+            0=0
+            1=1
+            3=3
+    )
+    coword_dropout=0.0
+    sample_context_size=true
+    multi_encoder=(
+        MultiEncoder:
+            false=false
+            true=true
+    )
+    seed=(
+        Seed:
+            first=0
+            second=9
+            third=11
+    )
+
+    gold_context=(
+        GoldContext:
+            false=false
+            true=true
+    )
+    lm_schedule_type=(
+        LMScheduleType:
+            all=all
+            suffix=suffix
+    )
+    lm_prob=(
+        LMProb:
+            0=0.
+            02=0.2
+            05=0.5
+            075=0.75
+    )
+}
+
+plan BaseTranslationModels {
+    reach AverageResults, MeasurePerplexity via (TgtLang: de) * (Seed: *)
+    reach AverageResults, MeasurePerplexity via (TgtLang: de) * (M: 3) * (LMProb: 0 05) * (GoldContext: true false) * (Seed: *)
+}
+
+plan PretrainedTranslationModels {
+    reach AverageResults, MeasurePerplexity via (TgtLang: de) * (Seed: *) * (Pretrain: true)
+    reach AverageResults, MeasurePerplexity via (TgtLang: de) * (M: 3) * (LMProb: 0 05) * (GoldContext: true false) * (Seed: *) * (Pretrain: true)
+    reach AverageResults, MeasurePerplexity via (TgtLang: de) * (M: 3) * (LMScheduleType: suffix) * (LMProb: 075) * (GoldContext: true false) * (Seed: *) * (Pretrain: true) 
+}
+
+plan TrainLM {
+    reach AverageResults via (TgtLang: de) * (TrainLMDecoder: true) * (GoldContext: true false) * (Seed: *)
+    reach AverageResults via (TgtLang: de) * (M: 3) * (TrainLMDecoder: true) * (GoldContext: true false) * (Seed: *)
+}
+
+plan Test {
+    reach GetData
+}
