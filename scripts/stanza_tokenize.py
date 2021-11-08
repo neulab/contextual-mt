@@ -1,7 +1,6 @@
 import argparse
-import stanza
 import spacy_stanza
-from mosestokenizer import MosesTokenizer, MosesDetokenizer
+import sacremoses
 
 
 def main():
@@ -17,6 +16,7 @@ def main():
 
     with open(args.output, "w", encoding="utf-8") as output_f:
         lang = args.lang.split("_")[0] if args.lang != "zh_tw" else "zh-hant"
+        detokenizer = sacremoses.MosesDetokenizer(lang=lang)
 
         try:
             tokenize = spacy_stanza.load_pipeline(lang, processors="tokenize,mwt")
@@ -25,11 +25,8 @@ def main():
 
         for line in lines:
             doc = tokenize(line)
-            line = (
-                " ".join([token.text for token in doc])
-                if not args.detok
-                else "".join([token.text_with_ws for token in doc])
-            )
+            tokens = [token.text for token in doc]
+            line = detokenizer.detokenize(tokens) if args.detok else " ".join(tokens)
             print(line, file=output_f)
 
 

@@ -6,7 +6,7 @@ global {
 
     repo="/home/pfernand/repos/contextual-mt"
     data_dir=/projects/tir1/corpora/TEDTALKS
-    comet_dir=/projects/tir1/users/pfernand/comet/
+    comet_dir=/projects/tir1/users/pfernand/comet-v3/
 
     src_lang="en"
     tgt_lang=(
@@ -30,7 +30,6 @@ global {
     N=0
     M=(
         M:
-            M=3
             1=1
             0=0
         )
@@ -53,6 +52,7 @@ global {
             null=""
             0=0
             1=1
+            3=3
     )
     gold_context=(
         GoldContext:
@@ -71,52 +71,29 @@ global {
             false=false
             true=true
         )
-    api_key=""
+    api_key=(
+        Provider:
+            null=""
+            google=""
+            deepl=""
+    )
 
     awesome_cachedir="/projects/tir5/users/patrick/awesome"
 }
 
+
 plan TrainEvaluate {
     reach CompareMT, ScorePredictions via (TgtLang: *) * (MultiEncoder: false) * (DecodeContextSize: 0)
-    #reach CompareMT, ScorePredictions via (TgtLang: *) * (MultiEncoder: false) * (DecodeContextSize: 1)
-    #reach CompareMT, ScorePredictions via (TgtLang: *) * (MultiEncoder: false) * (DecodeContextSize: 1) * (GoldContext: true)
+    reach CompareMt, ScorePredictions via (TgtLang: *) * (MultiEncoder: false) * (DecodeContextSize: 1) * (GoldContext: *)
 }
-
-plan TagReferences {
-    reach TagReference via (TgtLang: *) * (SampleContextSize: false)
-}
-
 
 plan TrainEvaluatePretrained {
-    reach CompareMT, ScorePredictions, MeasureCXMI via (TgtLang: de fr ja zh_cn pt_br) * (Pretrain: true) * (MultiEncoder: false)
-    reach CompareMT, ScorePredictions via (TgtLang: de fr ja zh_cn pt_br) * (Pretrain: true) * (MultiEncoder: false) * (GoldContext: true)
-    reach CompareMT, ScorePredictions via (TgtLang: de fr ja zh_cn pt_br) * (Pretrain: true) * (MultiEncoder: false) * (DecodeContextSize: 0)
-}
-
-plan TrainEvaluateFixedPretrained {
-    reach ScorePredictions, CompareMT via (TgtLang: de fr ja zh_cn) * (Pretrain: true) * (MultiEncoder: false) * (SampleContextSize: false) * (DecodeContextSize: 0)
-    #reach ScorePredictions, CompareMT via (TgtLang: de fr ja zh_cn) * (Pretrain: true) * (MultiEncoder: false) * (SampleContextSize: false) * (M: 0)
-    reach ScorePredictions, CompareMT via (TgtLang: de fr ja zh_cn) * (Pretrain: true) * (MultiEncoder: false) * (SampleContextSize: false)
-    reach ScorePredictions, CompareMT via (TgtLang: de fr ja zh_cn) * (Pretrain: true) * (MultiEncoder: false) * (GoldContext: true) * (SampleContextSize: false)
-}
-
-plan TrainEvaluateFixed {
-    reach ScorePredictions via (TgtLang: *) * (MultiEncoder: false) * (SampleContextSize: false)
-    reach ScorePredictions via (TgtLang: *) * (MultiEncoder: false) * (GoldContext: true) * (SampleContextSize: false)
-}
-
-plan TrainEvaluateFixedMulti {
-    reach ScorePredictions via (TgtLang: de fr ja zh_cn pt_br) * (MultiEncoder: true) * (SampleContextSize: false)
-    reach ScorePredictions via (TgtLang: de fr ja zh_cn pt_br) * (MultiEncoder: true) * (GoldContext: true) * (SampleContextSize: false)
+    reach CompareMT, ScorePredictions via (TgtLang: de fr ja zh_cn pt_br) * (MultiEncoder: false) * (Pretrain: true) * (DecodeContextSize: 0)
+    reach CompareMT, ScorePredictions via (TgtLang: de fr ja zh_cn pt_br) * (MultiEncoder: false) * (Pretrain: true) * (DecodeContextSize: 1) * (GoldContext: *)
 }
 
 plan EvaluateProvider {
-    reach CompareMT, ScorePredictions via (TgtLang: ru ja zh_cn ko ar pt_br es tr he ro it fr nl de) * (Provider: google)
+    reach CompareMT, ScorePredictions via (TgtLang: ru ja zh_cn ko ar pt_br es tr he ro it fr nl de) * (Provider: google) * (ProviderSentenceLevel: true)
+    reach CompareMT, ScorePredictions via (TgtLang: ru zh_cn ja pt_br es ro it fr nl de) * (Provider: deepl) * (ProviderSentenceLevel: true)
     reach CompareMT, ScorePredictions via (TgtLang: ru zh_cn ja pt_br es ro it fr nl de) * (Provider: deepl)
-    reach CompareMT, ScorePredictions, ProviderTranslate via (TgtLang: ru zh_cn ja pt_br es ro it fr nl de) * (Provider: deepl) * (ProviderSentenceLevel: true)
-}
-
-plan Wombo {
-    reach CompareMT, ScorePredictions via (M: 1) * (TgtLang: *) * (MultiEncoder: false) * (SampleContextSize: false)
-    reach CompareMT, ScorePredictions via (M: 1) * (TgtLang: *) * (MultiEncoder: false) * (GoldContext: true) * (SampleContextSize: false)
 }

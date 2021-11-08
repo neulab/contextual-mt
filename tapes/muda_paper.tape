@@ -1,10 +1,8 @@
-import "submitters.tape"
-
 task ExtractData
     < data_dir=@
     > extract_dir
     :: repo=@
-    :: .submitter=@ .mem=8000 .gpus=0 .cpus=1
+    :: .submitter=@ .mem=8000 .cpus=1
 {
     mkdir $extract_dir
     python $repo/scripts/data/ted/extract_ted.py $data_dir $extract_dir
@@ -22,7 +20,7 @@ task GetData
     > test_tgt
     > test_docids
     > null_file
-    :: .submitter=@ .mem=8000 .gpus=1 .cpus=2
+    :: .submitter=@ .mem=8000 .gres="gpu:1" .cpus=2 .time=0 .exclude=tir-0-19
     :: src_lang=@
     :: tgt_lang=@
     :: repo=@
@@ -47,7 +45,7 @@ task TrainSentencePiece
     > tgt_spm
     > src_vocab
     > tgt_vocab
-    :: .submitter=@ .mem=8000 .gpus=0 .cpus=1
+    :: .submitter=@ .mem=8000 .cpus=1 .time=0 .exclude=tir-0-19
     :: repo=@
     :: joint_vocab=false
     :: vocab_size=20000
@@ -77,7 +75,7 @@ task TrainSentencePiece
 }
 
 task PreparePretrained
-    :: .submitter=@ .mem=8000 .gpus=0 .cpus=1
+    :: .submitter=@ .mem=8000 .cpus=1 .exclude=tir-0-19
     > pretrained_model
     > src_spm
     > tgt_spm 
@@ -87,13 +85,13 @@ task PreparePretrained
     :: tgt_lang=@
 {
     if [ "$tgt_lang" == "de" ]; then
-        ln -s /projects/tir5/users/patrick/checkpoints/paracrawl/pretrain_large/checkpoint_best.pt $pretrained_model
+        ln -s /projects/tir5/users/patrick/checkpoints/paracrawl/en-de/checkpoint_best.pt $pretrained_model
         ln -s /projects/tir1/corpora/dialogue_mt/paracrawl/en-de/prep/spm.model $src_spm
         ln -s /projects/tir1/corpora/dialogue_mt/paracrawl/en-de/prep/spm.model $tgt_spm
         ln -s /projects/tir1/corpora/dialogue_mt/paracrawl/en-de/prep/dict.en-de.txt $src_vocab
         ln -s /projects/tir1/corpora/dialogue_mt/paracrawl/en-de/prep/dict.en-de.txt $tgt_vocab
     elif [ "$tgt_lang" == "fr" ]; then
-        ln -s /projects/tir5/users/patrick/checkpoints/paracrawl/en-fr/pretrain_large/checkpoint_best.pt $pretrained_model
+        ln -s /projects/tir5/users/patrick/checkpoints/paracrawl/en-fr/checkpoint_best.pt $pretrained_model
         ln -s /projects/tir5/users/patrick/data/paracrawl/en-fr/prep/spm.model $src_spm
         ln -s /projects/tir5/users/patrick/data/paracrawl/en-fr/prep/spm.model $tgt_spm
         ln -s /projects/tir5/users/patrick/data/paracrawl/en-fr/prep/dict.en-fr.txt $src_vocab
@@ -147,7 +145,7 @@ task ApplySentencePiece
         )
     > prep_src
     > prep_tgt
-    :: .submitter=@ .mem=8000 .gpus=0 .cpus=1
+    :: .submitter=@ .mem=8000  .cpus=1 .exclude=tir-0-19
     :: repo=@
 {
     python $repo/scripts/spm_encode.py \
@@ -191,7 +189,7 @@ task Binarize
             true=$tgt_vocab@PreparePretrained
         )
     > bin_dir
-    :: .submitter=@ .mem=8000 .gpus=0 .cpus=10
+    :: .submitter=@ .mem=8000 .cpus=10 .exclude=tir-0-19
     :: src_lang=@
     :: tgt_lang=@
 {
@@ -224,7 +222,7 @@ task TrainModel
             true=$pretrained_model@PreparePretrained
         )
     > checkpoint_dir
-    :: .submitter=@ .mem=16000 .gpus=1 .cpus=2
+    :: .submitter=@ .mem=16000 .gres="gpu:1" .cpus=2 .time=0 .exclude=tir-0-19
     :: src_lang=@
     :: tgt_lang=@
     :: N=@
@@ -250,8 +248,14 @@ task TrainModel
         lr=5e-4
         arch=contextual_transformer_iwslt
         patience=5
-        max_epoch=50
+        max_epoch=75
     fi
+
+    # --eval-bleu \
+    # --eval-bleu-args '{"beam": 5, "max_len_a": 1.2, "max_len_b": 10}' \
+    # --eval-bleu-remove-bpe sentencepiece \
+    # --eval-bleu-print-samples \
+    
 
     fairseq-train \
         $bin_dir --user-dir $repo/contextual_mt \
@@ -265,15 +269,11 @@ task TrainModel
         $([ "$multi_encoder" = true ] && echo "--multi-encoder" || echo "") \
         --log-interval 10 \
         --arch $arch --share-decoder-input-output-embed  \
-        --optimizer adam --adam-betas '(0.9, 0.98)' --clip-norm 0.1 \
+        --optimizer adam --adam-betas '(0.9, 0.98)' --clip-norm 1 \
         --lr $lr --lr-scheduler inverse_sqrt  --warmup-updates 4000 \
+        --save-dir $checkpoint_dir --no-epoch-checkpoints \
         --criterion label_smoothed_cross_entropy --label-smoothing 0.1 --dropout 0.3 --weight-decay 0.0001 \
         --max-tokens 4096 --update-freq 8 --patience $patience --seed 42 \
-        --eval-bleu \
-        --eval-bleu-args '{"beam": 5, "max_len_a": 1.2, "max_len_b": 10}' \
-        --eval-bleu-remove-bpe sentencepiece \
-        --eval-bleu-print-samples \
-        --save-dir $checkpoint_dir --no-epoch-checkpoints \
         --seed $seed
 
     cp $bin_dir/dict.* $bin_dir/spm.* $checkpoint_dir
@@ -285,7 +285,7 @@ task GeneratePredictions
     < test_tgt=@GetData
     < test_docids=@GetData
     > test_pred
-    :: .submitter=@ .mem=16000 .gpus=1 .cpus=2
+    :: .submitter=@ .mem=16000 .gres="gpu:1" .cpus=2 .exclude=tir-0-19
     :: src_lang=@
     :: tgt_lang=@
     :: decode_context_size=@
@@ -311,7 +311,7 @@ task MeasureCXMI
     < checkpoint_dir=@TrainModel
     > cxmi_results
     > word_cxmi
-    :: .submitter=@ .mem=16000 .gpus=1 .cpus=2
+    :: .submitter=@ .mem=16000 .gres="gpu:1" .cpus=2
     :: repo=@
     :: src_lang=@
     :: tgt_lang=@
@@ -330,7 +330,7 @@ task ProviderTranslate
     < test_src=@GetData
     < test_docids=@GetData
     > test_pred
-    :: .submitter=@ .mem=16000 .gpus=0 .cpus=1
+    :: .submitter=@ .mem=16000  .cpus=1
     :: repo=@
     :: provider=@
     :: provider_sentence_level=@
@@ -359,15 +359,14 @@ task ScorePredictions
     < test_src=@GetData
     < test_tgt=@GetData
     > score
-    :: .submitter=@ .mem=16000 .gpus=1 .cpus=2
+    :: .submitter=@ .mem=16000 .gres="gpu:1" .cpus=2 .exclude=tir-0-19
     :: repo=@
     :: tgt_lang=@
     :: comet_dir=@
 {
     python $repo/scripts/score.py $test_pred $test_tgt \
         --src $test_src \
-        --lang $tgt_lang \
-        --comet-model wmt-large-da-estimator-1719 --comet-path $comet_dir > $score
+        --comet-dir $comet_dir > $score
 }
 
 task TagReference
@@ -392,7 +391,7 @@ task TagReference
     > test_tgt_tok
     > tagged_tgt
     > tokenized_cxmis
-    :: .submitter=@ .mem=16000 .gpus=1 .cpus=5
+    :: .submitter=@ .mem=16000 .gres="gpu:1" .time=0 .cpus=4 .exclude=tir-0-19
     :: repo=@
     :: src_lang=@
     :: tgt_lang=@
@@ -453,18 +452,14 @@ task TagTranslations
     )
     > test_pred_tok
     > tagged_pred
-    :: .submitter=@ .mem=16000 .gpus=1 .cpus=5
+    :: .submitter=@ .mem=16000 .gres="gpu:1" .cpus=5
     :: repo=@
     :: src_lang=@
     :: tgt_lang=@
     :: awesome_cachedir=@
     :: awesome_model="bert-base-multilingual-cased"
 {
-    python $repo/scripts/stanza_tokenize.py \
-        $test_pred \
-        --lang $tgt_lang \
-        --tok-output $test_pred_tok \
-        --detok-output $test_pred_detok
+    python $repo/scripts/stanza_tokenize.py $test_pred $test_pred_tok --lang $tgt_lang
 
     python $repo/scripts/format_align.py \
         --source-file $test_src_tok \
@@ -481,8 +476,8 @@ task TagTranslations
     python $repo/scripts/tagger.py \
         --src-tok-file $test_src_tok \
         --tgt-tok-file $test_pred_tok \
-        --src-detok-file $test_src_detok \
-        --tgt-detok-file $test_pred_detok \
+        --src-detok-file $test_src \
+        --tgt-detok-file $test_pred \
         --docids-file $test_docids \
         --alignments-file alignments.out \
         --source-lang ${src_lang} --target-lang ${tgt_lang} \
@@ -497,7 +492,7 @@ task CompareMT
     < tagged_tgt=@TagReference
     < tagged_pred=@TagTranslations
     > comparemt_output
-    :: .submitter=@ .mem=16000 .gpus=0 .cpus=1
+    :: .submitter=@ .mem=16000  .cpus=1
     :: repo=@
 {
     python $repo/scripts/get_label_set.py --tag-file $tagged_tgt --labels-file label.set
