@@ -585,7 +585,7 @@ class ItalianTagger(Tagger):
         for i, tok in enumerate(cur_tgt_doc):
             if self._normalize(tok.text) in you_verbs:
                 person = tok.morph.get("Person")
-                if "2" in person:
+                if "2" in person and tok.morph.get("Number") == "Sing":
                     if "2" in prev_formality_tags:
                         try:
                             tags[cur_tgt.index(tok.text)] = True
@@ -593,7 +593,7 @@ class ItalianTagger(Tagger):
                             pass
                     else:
                         prev_formality_tags.add("2")
-                elif "3" in person:
+                elif "3" in person and tok.morph.get("Number") == "Sing":
                     if "3" in prev_formality_tags:
                         try:
                             tags[cur_tgt.index(tok.text)] = True
