@@ -12,7 +12,7 @@ class Tagger(abc.ABC):
     """Abstact class that represent a tagger for a language"""
 
     def __init__(self):
-        self.tagger = spacy.load("xx_ent_wiki_sm")
+        #self.tagger = spacy.load("xx_ent_wiki_sm")
         self.formality_classes = {}
         self.ambiguous_pronouns = None
         self.ambiguous_verbform = []
@@ -70,7 +70,7 @@ class Tagger(abc.ABC):
             src_lemma = src_lemmas[s]
             tgt_lemma = tgt_lemmas[t]
             if src_lemma is not None and tgt_lemma is not None:
-                if cohesion_words[src_lemma][tgt_lemma] > 1:
+                if cohesion_words[src_lemma][tgt_lemma] > 2:
                     tags[t] = True
                 tmp_cohesion_words[src_lemma][tgt_lemma] += 1
         
@@ -830,6 +830,7 @@ def main():
     tgt_docs = tagger.tagger.pipe(detok_tgts)
 
     prev_docid = None
+    failed_coref = 0
     with open(args.output, "w", encoding="utf-8") as output_file:
         for (
             source,
@@ -875,16 +876,19 @@ def main():
             #     - max(args.source_context_size, args.target_context_size) :
             # ]
 
-            
-            coref = en_coref.predict(document=source)
-            assert len(source.split(" ")) == len(coref["document"])
-            has_ante = [False for _ in range(len(coref["document"]))]
+            has_ante = [False for _ in range(len(source.split(" ")))]
+            # TODO: proper exception capturing
             try:
+                coref = en_coref.predict(document=source)
+                if len(source.split(" ")) != len(coref["document"]):
+                    raise Exception()
+
                 for cluster in coref["clusters"]:
                     for mention in cluster[1:]:
                         for i in range(mention[0], mention[1] + 1):
                             has_ante[i] = True
             except:
+                failed_coref+=1
                 pass
 
             lexical_tags, cohesion_words = tagger.lexical_cohesion(
@@ -931,6 +935,7 @@ def main():
 
             source_context.append(source)
             target_context.append(target)
+        print(f"{failed_coref}/{len(srcs)}")
 
 
 if __name__ == "__main__":
