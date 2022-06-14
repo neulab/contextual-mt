@@ -189,11 +189,11 @@ def main():
     args = parser.parse_args()
 
     # load files needed
-    with open(args.source_file, "r", encoding="utf-8") as src_f:
+    with open(args.source_file, "r", encoding='utf-8') as src_f:
         srcs = [line.strip() for line in src_f]
-    with open(args.reference_file, "r", encoding="utf-8") as tgt_f:
+    with open(args.reference_file, "r", encoding='utf-8') as tgt_f:
         refs = [line.strip() for line in tgt_f]
-    with open(args.docids_file, "r", encoding="utf-8") as docids_f:
+    with open(args.docids_file, "r", encoding='utf-8') as docids_f:
         docids = [int(idx) for idx in docids_f]
 
     pretrained = hub_utils.from_pretrained(
