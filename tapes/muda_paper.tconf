@@ -1,0 +1,99 @@
+global {
+    ducttape_output="/projects/tir5/users/patrick/ted-experiments-v2"
+    ducttape_experimental_imports=true
+    ducttape_experimental_submitters=true
+    ducttape_experimental_multiproc=true
+
+    repo="/home/pfernand/repos/contextual-mt"
+    data_dir=/projects/tir1/corpora/TEDTALKS
+    comet_dir=/projects/tir1/users/pfernand/comet-v3/
+
+    src_lang="en"
+    tgt_lang=(
+        TgtLang: 
+            ru="ru"
+            ja="ja"
+            zh_cn="zh_cn"
+            ko="ko"
+            ar="ar"
+            pt_br="pt_br"
+            es="es"
+            tr="tr"
+            he="he"
+            ro="ro"
+            it="it"
+            fr="fr"
+            nl="nl"
+            de="de"
+        )
+
+    N=0
+    M=(
+        M:
+            1=1
+            0=0
+        )
+    coword_dropout=0.2
+    multi_encoder=(
+        MultiEncoder:
+            false="false"
+            true="true"
+    )
+    seed=0
+
+    submitter=slurm
+    sample_context_size=(
+        SampleContextSize:
+            true=true
+            false=false
+    )
+    decode_context_size=(
+        DecodeContextSize:
+            null=""
+            0=0
+            1=1
+            3=3
+    )
+    gold_context=(
+        GoldContext:
+            false=false
+            true=true
+    )
+
+    provider=(
+        Provider:
+            null=""
+            google="google"
+            deepl="deepl"
+    )
+    provider_sentence_level=(
+        ProviderSentenceLevel:
+            false=false
+            true=true
+        )
+    api_key=(
+        Provider:
+            null=""
+            google=""
+            deepl=""
+    )
+
+    awesome_cachedir="/projects/tir5/users/patrick/awesome"
+}
+
+
+plan TrainEvaluate {
+    reach CompareMT, ScorePredictions via (TgtLang: *) * (MultiEncoder: false) * (DecodeContextSize: 0)
+    reach CompareMt, ScorePredictions via (TgtLang: *) * (MultiEncoder: false) * (DecodeContextSize: 1) * (GoldContext: *)
+}
+
+plan TrainEvaluatePretrained {
+    reach CompareMT, ScorePredictions via (TgtLang: de fr ja zh_cn pt_br) * (MultiEncoder: false) * (Pretrain: true) * (DecodeContextSize: 0)
+    reach CompareMT, ScorePredictions via (TgtLang: de fr ja zh_cn pt_br) * (MultiEncoder: false) * (Pretrain: true) * (DecodeContextSize: 1) * (GoldContext: *)
+}
+
+plan EvaluateProvider {
+    reach CompareMT, ScorePredictions via (TgtLang: ru ja zh_cn ko ar pt_br es tr he ro it fr nl de) * (Provider: google) * (ProviderSentenceLevel: true)
+    reach CompareMT, ScorePredictions via (TgtLang: ru zh_cn ja pt_br es ro it fr nl de) * (Provider: deepl) * (ProviderSentenceLevel: true)
+    reach CompareMT, ScorePredictions via (TgtLang: ru zh_cn ja pt_br es ro it fr nl de) * (Provider: deepl)
+}
